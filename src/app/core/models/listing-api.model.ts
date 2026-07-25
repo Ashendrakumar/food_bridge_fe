@@ -54,10 +54,24 @@ export interface ApiListing {
   status: ApiListingStatus;
   volunteerId: string | null;
   recipientId: string | null;
+  // Contact info (Phase 11) — gated to the listing's own parties, else null.
+  donorName?: string | null;
+  donorMobile?: string | null;
+  volunteerName?: string | null;
+  volunteerMobile?: string | null;
+  recipientName?: string | null;
+  recipientMobile?: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
   images: ApiListingImage[];
   timeline: ApiListingTimelineEntry[];
+}
+
+/** Result of POST /listings/{id}/confirm-receipt. */
+export interface ConfirmReceiptResult {
+  listing: ApiListing;
+  certificateNumber: string;
+  pointsAwarded: number;
 }
 
 /** Lightweight list shape — GET /listings. */
@@ -129,8 +143,11 @@ export function toListingStatus(status: ApiListingStatus): ListingStatus {
       return 'delivered';
     case 'Confirmed':
       return 'confirmed';
+    case 'Cancelled':
+      return 'cancelled';
+    case 'Rejected':
+      return 'rejected';
     default:
-      // Expired / Cancelled / Rejected have no dedicated timeline step.
       return 'expired';
   }
 }

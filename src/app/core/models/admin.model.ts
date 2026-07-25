@@ -1,17 +1,27 @@
-export interface AdminDashboardStats {
+/** GET /api/admin/dashboard. */
+export interface AdminDashboard {
+  totalDonors: number;
+  totalVolunteers: number;
+  totalRecipients: number;
+  pendingRecipients: number;
   totalListings: number;
-  pendingVerifications: number;
+  pendingListings: number;
+  activeListings: number;
+  confirmedListings: number;
+  totalMealsDonated: number;
+  totalCertificatesIssued: number;
+  totalVolunteerPointsAwarded: number;
   openDisputes: number;
-  mealsServed: number;
+  resolvedDisputes: number;
 }
 
-export type AccountStatus = 'pending' | 'verified' | 'suspended';
-
+/** GET /api/admin/accounts row. */
 export interface AdminAccount {
-  id: number | string;
+  id: string;
   name: string;
-  type: 'Volunteer' | 'Organization' | 'Donor';
-  city: string;
-  status: AccountStatus;
-  joined: string;
+  mobile: string;
+  role: string;
+  city: string | null;
+  accountStatus: string;
+  createdAtUtc: string;
 }

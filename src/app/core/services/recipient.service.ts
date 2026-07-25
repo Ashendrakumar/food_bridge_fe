@@ -1,25 +1,41 @@
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_ENDPOINTS } from '@core/config/api-endpoints';
-import { ApiService } from '@core/http/api.service';
-import { Listing } from '@core/models/listing.model';
+import { ApiService, QueryParams } from '@core/http/api.service';
+import { ApiListing, ApiListingSummary, ConfirmReceiptResult } from '@core/models/listing-api.model';
 
 /**
- * Recipient data endpoints. The listing-mutating actions (accept / reject /
- * confirm-receipt) live on {@link ListingService}; this covers the recipient
- * GET feeds.
+ * Recipient listing endpoints (Phase 6): the incoming feed, accept/reject the
+ * match, confirm receipt (atomic points + certificate + notifications), history.
  */
 @Injectable({ providedIn: 'root' })
 export class RecipientService {
   private readonly api = inject(ApiService);
 
-  /** Food currently picked-up & headed their way. */
-  incoming(id: string | number): Observable<Listing[]> {
-    return this.api.get<Listing[]>(API_ENDPOINTS.recipients.incoming(id));
+  /** Listings matched to the caller, awaiting an accept/reject decision. */
+  incoming(page = 1, pageSize = 50): Observable<ApiListingSummary[]> {
+    const params: QueryParams = { page, pageSize };
+    return this.api.get<ApiListingSummary[]>(API_ENDPOINTS.listings.incoming, params);
   }
 
-  /** Distribution history. */
-  history(id: string | number): Observable<Listing[]> {
-    return this.api.get<Listing[]>(API_ENDPOINTS.recipients.history(id));
+  /** Acknowledge the match (status unchanged). */
+  accept(id: string): Observable<ApiListing> {
+    return this.api.post<ApiListing>(API_ENDPOINTS.listings.accept(id));
+  }
+
+  /** Decline — auto-reassigns to another available recipient (or none). */
+  reject(id: string): Observable<ApiListing> {
+    return this.api.post<ApiListing>(API_ENDPOINTS.listings.reject(id));
+  }
+
+  /** Confirm receipt (Delivered → Confirmed) — awards points + issues a certificate. */
+  confirmReceipt(id: string): Observable<ConfirmReceiptResult> {
+    return this.api.post<ConfirmReceiptResult>(API_ENDPOINTS.listings.confirmReceipt(id));
+  }
+
+  /** The caller's past confirmed receipts. */
+  history(page = 1, pageSize = 50): Observable<ApiListingSummary[]> {
+    const params: QueryParams = { page, pageSize };
+    return this.api.get<ApiListingSummary[]>(API_ENDPOINTS.listings.history, params);
   }
 }

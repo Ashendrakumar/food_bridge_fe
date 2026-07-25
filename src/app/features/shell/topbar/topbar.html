@@ -11,10 +11,42 @@
         <i class="fa-solid fa-bars"></i>
       </button>
     </div>
-    <div class="search-box hidden md:block">
+    <div class="search-box hidden lg:block">
       <i class="fa-solid fa-magnifying-glass"></i>
       <input type="text" placeholder="Search listings, NGOs, volunteers..." />
     </div>
+
+    <!-- Pickup address selector (donors) -->
+    @if (isDonor()) {
+      <div class="relative">
+        <button type="button" class="addr-btn" (click)="toggleAddr()" title="Pickup address">
+          <i class="fa-solid fa-location-dot text-primary"></i>
+          <span class="truncate max-w-[120px] sm:max-w-[180px]">{{ pickup.selected()?.label || 'Set pickup address' }}</span>
+          <i class="fa-solid fa-chevron-down text-[10px] text-muted"></i>
+        </button>
+        @if (addrOpen()) {
+          <div class="dropdown-panel left-0 w-[300px]">
+            <div class="px-2 py-1 small-label">Pickup address</div>
+            @for (a of pickup.addresses(); track a.id) {
+              <div class="addr-item" [class.sel]="a.id === pickup.selected()?.id" (click)="selectAddr(a.id)">
+                <i class="fa-solid mr-2" [class]="a.id === pickup.selected()?.id ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
+                <span class="flex-1 text-sm truncate">{{ a.label }}</span>
+                <button type="button" class="addr-x" title="Remove" (click)="removeAddr(a.id, $event)"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            } @empty {
+              <div class="text-muted text-sm px-2 py-1">No saved addresses yet</div>
+            }
+            <hr class="my-1.5 border-line" />
+            <div class="p-1 flex gap-2">
+              <input #addrInput type="text" class="addr-input" placeholder="Add another address…" (keyup.enter)="addAddr(addrInput)" />
+              <button type="button" class="btn-fb !py-2 !px-3 !text-sm shrink-0" [disabled]="addingAddr()" (click)="addAddr(addrInput)">
+                <i class="fa-solid" [class]="addingAddr() ? 'fa-spinner fa-spin' : 'fa-plus'"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
   </div>
 
   <div class="flex items-center gap-4">
@@ -48,12 +80,15 @@
       @if (notifOpen()) {
         <div class="dropdown-panel w-[320px]">
           <div class="px-2 py-1 font-semibold text-sm">Notifications</div>
-          @for (n of notifications.notifications(); track $index) {
-            <div class="notif-item">
-              <span class="notif-dot"></span>
-              <div>
-                <div class="text-[13px]">{{ n.text }}</div>
-                <div class="text-muted text-[11px]">{{ n.time }}</div>
+          @for (n of notifications.notifications(); track n.id) {
+            <div class="notif-item cursor-pointer" [class.opacity-60]="n.isRead" (click)="notifications.markRead(n.id)">
+              <span class="notif-dot" [style.visibility]="n.isRead ? 'hidden' : 'visible'"></span>
+              <div class="min-w-0">
+                <div class="text-[13px] font-medium">{{ n.title }}</div>
+                @if (n.body) {
+                  <div class="text-muted text-[12px]">{{ n.body }}</div>
+                }
+                <div class="text-muted text-[11px]">{{ n.createdAtUtc | date: 'MMM d, h:mm a' }}</div>
               </div>
             </div>
           } @empty {
@@ -92,7 +127,7 @@
     </div>
   </div>
 
-  @if (notifOpen() || menuOpen()) {
+  @if (notifOpen() || menuOpen() || addrOpen()) {
     <div class="menu-backdrop" (click)="closeMenus()"></div>
   }
 </div>

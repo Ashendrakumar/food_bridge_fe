@@ -1,20 +1,15 @@
-import { ListingStatus } from './listing.model';
-
-export interface LatLng {
-  lat: number;
-  lng: number;
-}
-
+/** GET /api/geocode (`GeocodeResult`). */
 export interface GeocodeResult {
-  address: string;
-  location: LatLng;
+  latitude: number;
+  longitude: number;
+  /** True when the address wasn't recognized and fell back to the city centre. */
+  isApproximate: boolean;
 }
 
-/** Live tracking snapshot returned by GET /listings/:id/track and the WS feed. */
+/** GET /api/listings/{id}/track — last reported volunteer position. */
 export interface TrackingSnapshot {
-  listingId: number | string;
-  status: ListingStatus;
-  volunteerLocation: LatLng | null;
-  etaMinutes: number | null;
-  updatedAt: string;
+  listingId: string;
+  latitude: number;
+  longitude: number;
+  reportedAtUtc: string;
 }

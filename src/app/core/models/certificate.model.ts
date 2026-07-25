@@ -1,9 +1,10 @@
+/** Donor certificate — GET /api/certificates (`CertificateResponse`). */
 export interface Certificate {
-  id: number | string;
-  donorId: number | string;
-  donor: string;
-  listingId: number | string;
-  meals: number;
-  recipient: string;
-  issuedAt: string;
+  id: string;
+  certificateNumber: string;
+  listingId: string;
+  mealsCount: number;
+  issuedAtUtc: string;
+  /** Null until the PDF has been generated (GET .../pdf) at least once. */
+  pdfUrl: string | null;
 }

@@ -36,7 +36,7 @@ src/app/
 │   ├── admin/               → all-listings, verifications, disputes, admin-reports
 │   ├── shell/               → shell, sidebar, topbar, coming-soon
 │   ├── dashboard, history, profile, settings
-├── shared/ui/               → reusable presentational components (button, input, map, toast, status-badge, rescue-timeline, empty-state, route-map)
+├── shared/ui/               → reusable presentational components (listing-card, listing-grid, status-badge, deadline-meter, avatar, role-badge, success-anim, button, input, map, toast, rescue-timeline, empty-state, route-map)
 └── environments/            → environment.ts (dev) / environment.prod.ts
 ```
 
@@ -76,8 +76,48 @@ The backend uses PascalCase enum **names** on the wire; the app maps them:
 - **Listing status:** backend `Pending|Claimed|PickedUp|Delivered|Confirmed|Expired|Cancelled|Rejected` → app lowercase `ListingStatus` via `toListingStatus()` for the shared `StatusBadge`/`RescueTimeline` components.
 - **DietType** `Veg|NonVeg`, **MealType** `Breakfast|Lunch|Dinner|Snacks`, **FreshnessTag** `JustCooked|FewHoursOld|Packaged` — kept as backend names in `listing-api.model.ts`, with `DIET_LABELS`/`FRESHNESS_LABELS` for display.
 
+## Reusable UI components (`shared/ui`)
+Prefer these over re-building card/list/badge markup. All are standalone, OnPush,
+and theme-aware. The listing card/grid are the canonical way to render any list of
+listings (My Listings, Incoming, History — bring new listing views onto them too).
+
+### `<app-listing-card>` — `shared/ui/listing-card/`
+One card for a listing: icon tile + title + food type, colour **status badge**,
+attribute **chips** (meals · diet · meal · freshness), an optional **deadline meter**,
+and a **projected footer for action buttons**.
+- Inputs: `listing` (required, `ListingCardData` — satisfied by `ApiListingSummary` **and** `ApiListing`), `icon` (FA class), `iconBg` (any CSS background), `deadline` (bool, default `true`), `clickable` (bool), `hasFooter` (bool).
+- Output: `cardClick` (fires only when `clickable`).
+- Footer: project `<div cardFooter>…</div>` and set `[hasFooter]="true"`. Footer content keeps the parent's context, so loop vars / component methods work inside it.
+```html
+<app-listing-card [listing]="l" icon="fa-solid fa-truck" iconBg="var(--fb-orange)" [hasFooter]="true">
+  <div cardFooter class="flex gap-2.5">
+    <button class="btn-fb-outline flex-1 !py-2 !text-sm" (click)="reject(l)">Reject</button>
+    <button class="btn-fb flex-1 !py-2 !text-sm" (click)="accept(l)">Accept</button>
+  </div>
+</app-listing-card>
+<!-- read-only variant: <app-listing-card [listing]="l" [deadline]="false" /> -->
+<!-- clickable variant:  <app-listing-card [listing]="l" [clickable]="true" (cardClick)="open(l)" /> -->
+```
+
+### `<app-listing-grid>` — `shared/ui/listing-grid/`
+Wraps a grid of listing cards and owns the **shared loading (skeletons)** and
+**empty** states. Project the cards as content.
+- Inputs: `loading` (bool → skeletons), `empty` (bool → empty state), `emptyIcon`, `emptyText`, `skeletonCount` (default 6), `gridClass` (responsive col utilities appended to `grid gap-4`, default `md:grid-cols-2 lg:grid-cols-3`).
+```html
+<app-listing-grid [loading]="loading()" [empty]="!rows().length" emptyText="Nothing here yet" gridClass="lg:grid-cols-3 2xl:grid-cols-4">
+  @for (l of rows(); track l.id) { <app-listing-card [listing]="l" /> }
+</app-listing-grid>
+```
+
+### Other shared pieces
+- `<app-status-badge [status]>` — icon + theme-aware colour per lowercase `ListingStatus` (Tailwind literal classes, not purge-affected).
+- `<app-deadline-meter [deadline] [createdAt]>` — pickup-window progress bar (green→amber→red→grey), ticked by the app-wide `ClockService`.
+- `<app-avatar [name] [imageUrl] [size]>` — image-or-2-letter-initials, `(error)` falls back to initials.
+- `<app-role-badge [role] [size]>` — coloured role pill; `<app-success-anim>` — animated verified/success SVG.
+- `[fbInputFilter]` directive — restricts typing to the input's `type` (tel/number → digits). `[appInfiniteScroll] (scrolled)` — IntersectionObserver sentinel for lazy paging.
+
 ## Models
-- `listing-api.model.ts` — backend-faithful listing DTOs (`ApiListing`, `ApiListingSummary`, `ApiNearbyListing`, `ListingWriteBody`) + enum types + label maps + `toListingStatus`.
+- `listing-api.model.ts` — backend-faithful listing DTOs (`ApiListing`, `ApiListingSummary`, `ApiNearbyListing`, `ListingWriteBody`) + enum types + label maps + `toListingStatus`. `ListingCardData` (in `listing-card.ts`) is the minimal card shape both `ApiListing`/`ApiListingSummary` satisfy.
 - `listing.model.ts` — the legacy/view `Listing` + lowercase `ListingStatus`, `STATUS_LABELS`, `TIMELINE_STEPS` (still used by shared UI and the not-yet-integrated mock pages).
 - `user.model.ts` — session `User` (+ `id`), full `UserProfile`, `UpdateProfileBody`.
 - `registration.model.ts` — `RegistrationDraft` / `RegisterPayload`.

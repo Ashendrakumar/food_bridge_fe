@@ -1,6 +1,6 @@
 /**
- * Central registry of backend API endpoints — mirrors the FoodBridge API
- * Specification (46 REST endpoints + 2 WebSocket channels across 11 modules).
+ * Central registry of backend API endpoints — mirrors the FoodBridge .NET API
+ * (see ../../FoodBridgeBE/docs/API-CONTRACTS.md).
  *
  * Paths are **relative** — `ApiService` prefixes `environment.apiUrl`.
  * Never inline endpoint strings in services/components; add them here so the
@@ -10,27 +10,24 @@
 type Id = string | number;
 
 export const API_ENDPOINTS = {
-  // 1. Authentication & Registration (5)
+  // 1. Authentication & Registration
   auth: {
     sendOtp: 'auth/send-otp',
     verifyOtp: 'auth/verify-otp',
     register: 'auth/register',
     logout: 'auth/logout',
     me: 'auth/me',
-    refresh: 'auth/refresh',
   },
 
-  // 2. User / Profile (4)
+  // 2. User / Profile
   users: {
     base: 'users',
-    register: 'auth/register',
     byId: (id: Id) => `users/${id}`,
-    byMobile: (mobile: string) => `users/by-mobile/${mobile}`,
     availability: (id: Id) => `users/${id}/availability`,
     avatar: (id: Id) => `users/${id}/avatar`,
   },
 
-  // 3 & 4. Listings — Donor + Volunteer side (10)
+  // 3–6. Listings (donor, volunteer, recipient) + tracking
   listings: {
     base: 'listings',
     byId: (id: Id) => `listings/${id}`,
@@ -39,64 +36,59 @@ export const API_ENDPOINTS = {
     // Volunteer
     nearby: 'listings/nearby',
     claim: (id: Id) => `listings/${id}/claim`,
+    unclaim: (id: Id) => `listings/${id}/unclaim`,
     confirmPickup: (id: Id) => `listings/${id}/confirm-pickup`,
     confirmDelivery: (id: Id) => `listings/${id}/confirm-delivery`,
     // Recipient
+    incoming: 'listings/incoming',
     accept: (id: Id) => `listings/${id}/accept`,
     reject: (id: Id) => `listings/${id}/reject`,
     confirmReceipt: (id: Id) => `listings/${id}/confirm-receipt`,
-    // Tracking
+    history: 'listings/history',
+    // Tracking (REST fallback for TrackingHub)
     track: (id: Id) => `listings/${id}/track`,
   },
 
-  // 5. Volunteer Data (3)
-  volunteers: {
-    deliveries: (id: Id) => `volunteers/${id}/deliveries`,
-    history: (id: Id) => `volunteers/${id}/history`,
-    leaderboard: 'leaderboard',
+  // 7. Notifications (REST fallback for NotificationsHub) + geocode
+  notifications: {
+    base: 'notifications',
+    read: (id: Id) => `notifications/${id}/read`,
   },
+  geocode: 'geocode',
 
-  // 6. Recipient Side (2 GETs; the listing actions live under `listings`)
-  recipients: {
-    incoming: (id: Id) => `recipients/${id}/incoming`,
-    history: (id: Id) => `recipients/${id}/history`,
-  },
-
-  // 7. Tracking / Maps (2 REST + 1 WS)
-  tracking: {
-    geocode: 'geocode',
-    ws: (listingId: Id) => `ws/tracking/${listingId}`,
-  },
-
-  // 8. Certificates (3)
+  // 8. Certificates
   certificates: {
     base: 'certificates',
     byId: (id: Id) => `certificates/${id}`,
     pdf: (id: Id) => `certificates/${id}/pdf`,
   },
 
-  // 9. Notifications (2 REST + 1 WS)
-  notifications: {
-    base: 'notifications',
-    read: (id: Id) => `notifications/${id}/read`,
-    ws: (userId: Id) => `ws/notifications/${userId}`,
+  // 8. Leaderboard
+  leaderboard: {
+    base: 'leaderboard',
+    me: 'leaderboard/me',
   },
 
-  // 10. Admin (8)
+  // 8/9. Reports (role-scoped via JWT — no id in the path)
+  reports: {
+    donor: 'reports/donor',
+    volunteer: 'reports/volunteer',
+    recipient: 'reports/recipient',
+    platform: 'reports/platform',
+  },
+
+  // 9. Disputes (raise: any party; list/resolve: admin)
+  disputes: {
+    base: 'disputes',
+    resolve: (id: Id) => `disputes/${id}/resolve`,
+  },
+
+  // 9. Admin
   admin: {
-    dashboardStats: 'admin/dashboard-stats',
+    dashboard: 'admin/dashboard',
     listings: 'admin/listings',
     accounts: 'admin/accounts',
     verifyAccount: (id: Id) => `admin/accounts/${id}/verify`,
     suspendAccount: (id: Id) => `admin/accounts/${id}/suspend`,
-    disputes: 'admin/disputes',
-    resolveDispute: (id: Id) => `admin/disputes/${id}/resolve`,
-    reports: 'admin/reports',
-  },
-
-  // 11. Reports (Donor / Recipient) (2)
-  reports: {
-    donor: (id: Id) => `reports/donor/${id}`,
-    recipient: (id: Id) => `reports/recipient/${id}`,
   },
 } as const;

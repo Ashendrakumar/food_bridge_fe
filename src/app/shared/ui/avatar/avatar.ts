@@ -52,6 +52,7 @@ import { initials as toInitials } from '@shared/util/initials';
 export class Avatar {
   readonly name = input<string | null | undefined>('');
   readonly imageUrl = input<string | null | undefined>(null);
+
   /** Diameter in pixels. */
   readonly size = input(40);
 
@@ -67,5 +68,6 @@ export class Avatar {
 
   protected onImageError(): void {
     this.failedUrl.set(this.imageUrl() ?? null);
+    console.log('Avatar name:', this.name());
   }
 }

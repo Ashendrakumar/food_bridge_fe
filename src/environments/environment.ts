@@ -10,7 +10,7 @@ export const environment = {
   // will reject it and the map shows a "For development purposes only" overlay.
   // Replace with a real key (Maps JavaScript API + Directions API enabled) for
   // a working map. Set to '' to fall back to the static placeholder card.
-  googleMapsApiKey: 'AIzaSyDUMMY0000000000000000000000TESTKEY',
+  googleMapsApiKey: 'AIzaSyAXVVochlS3spceNiarzKJK6Jjgm_n8F7c',
   // Default map centre (Ahmedabad) used when no explicit centre is provided.
   mapDefaultCenter: { lat: 23.0225, lng: 72.5714 },
   mapDefaultZoom: 13,

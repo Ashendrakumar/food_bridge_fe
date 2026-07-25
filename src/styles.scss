@@ -253,29 +253,30 @@ body {
   .badge-fb {
     @apply text-[11px] font-bold px-3 py-1.5 rounded-full capitalize;
   }
+  /* Status badges — a distinct, theme-aware hue per status */
   .badge-pending {
-    background: var(--fb-orange-soft);
-    color: #b4551e;
+    @apply bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300;
   }
   .badge-claimed {
-    background: #fff3d6;
-    color: #9a6b00;
+    @apply bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300;
   }
   .badge-pickedup {
-    background: #e4eeff;
-    color: #2258c7;
+    @apply bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300;
   }
   .badge-delivered {
-    background: var(--fb-success-soft);
-    color: var(--fb-success-deep);
+    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300;
   }
   .badge-confirmed {
-    background: #ddf6e6;
-    color: #0f7a45;
+    @apply bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300;
   }
   .badge-expired {
-    background: #f1f1f1;
-    color: #8a8a8a;
+    @apply bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300;
+  }
+  .badge-cancelled {
+    @apply bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300;
+  }
+  .badge-rejected {
+    @apply bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300;
   }
 
   /* ---- Auth form typography & fields ---- */

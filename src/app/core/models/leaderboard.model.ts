@@ -1,8 +1,8 @@
+/** Leaderboard row — GET /api/leaderboard (`LeaderboardEntryResponse`). */
 export interface LeaderboardEntry {
-  rank: number;
-  volunteerId: number | string;
+  volunteerId: string;
   name: string;
-  points: number;
-  deliveries: number;
-  city?: string;
+  totalPoints: number;
+  totalDeliveries: number;
+  rank: number;
 }

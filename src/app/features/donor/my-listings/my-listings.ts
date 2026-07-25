@@ -2,19 +2,15 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
-import {
-  ApiListingSummary,
-  DIET_LABELS,
-  FRESHNESS_LABELS,
-  toListingStatus,
-} from '@core/models/listing-api.model';
+import { ApiListingSummary, toListingStatus } from '@core/models/listing-api.model';
 import { ListingStatus } from '@core/models/listing.model';
 import { ListingService } from '@core/services/listing.service';
 import { ToastService } from '@core/services/toast.service';
 import { InfiniteScroll } from '@shared/directives/infinite-scroll.directive';
-import { EmptyState } from '@shared/ui/empty-state/empty-state';
+import { ListingCard } from '@shared/ui/listing-card/listing-card';
+import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
+import { Pill } from '@shared/ui/pill/pill';
 import { RescueTimeline } from '@shared/ui/rescue-timeline/rescue-timeline';
-import { StatusBadge } from '@shared/ui/status-badge/status-badge';
 
 type Tab = 'all' | 'pending' | 'claimed' | 'delivered' | 'expired';
 
@@ -22,7 +18,7 @@ const PAGE_SIZE = 9;
 
 @Component({
   selector: 'app-my-listings',
-  imports: [StatusBadge, RescueTimeline, EmptyState, DatePipe, InfiniteScroll],
+  imports: [RescueTimeline, DatePipe, InfiniteScroll, ListingCard, ListingGrid, Pill],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h3 class="page-title">My Listings</h3>
@@ -30,51 +26,24 @@ const PAGE_SIZE = 9;
 
     <div class="flex flex-wrap gap-2 mb-4">
       @for (t of tabs; track t) {
-        <button
-          [class]="(tab() === t ? 'btn-fb' : 'btn-fb-outline') + ' !px-4 !py-1.5 !text-sm capitalize'"
-          (click)="tab.set(t)"
-        >
-          {{ t }}
+        <button [class]="'tab-pill ' + tabClass(t)" (click)="tab.set(t)">
+          <i [class]="tabIcon[t]"></i><span class="capitalize">{{ t }}</span>
         </button>
       }
     </div>
 
-    @if (loading()) {
-      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        @for (s of skeletons; track s) {
-          <div class="card-fb p-4">
-            <div class="skeleton h-4 w-24 mb-3"></div>
-            <div class="skeleton h-5 w-3/4 mb-2"></div>
-            <div class="skeleton h-3 w-1/2 mb-2"></div>
-            <div class="skeleton h-3 w-2/3"></div>
-          </div>
-        }
-      </div>
-    } @else {
-      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        @for (l of filtered(); track l.id) {
-          <div
-            class="card-fb p-4 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg"
-            (click)="selected.set(l)"
-          >
-            <div class="flex justify-between items-start mb-2">
-              <span class="badge-fb bg-primary-soft text-primary-deep">{{ l.foodType }}</span>
-              <app-status-badge [status]="statusOf(l)" />
-            </div>
-            <div class="font-semibold">{{ l.title }}</div>
-            <div class="text-muted text-xs mt-1">{{ mealLabel(l) }} · {{ l.quantityMeals }} meals</div>
-            <div class="text-muted text-xs">
-              <i class="fa-regular fa-clock mr-1"></i>Pickup by {{ l.pickupDeadlineUtc | date: 'MMM d, h:mm a' }}
-            </div>
-          </div>
-        } @empty {
-          <div class="md:col-span-2 lg:col-span-3">
-            <app-empty-state icon="fa-solid fa-box-open" text="No listings in this category yet" />
-          </div>
-        }
-      </div>
+    <app-listing-grid
+      [loading]="loading()"
+      [empty]="!filtered().length"
+      emptyIcon="fa-solid fa-box-open"
+      emptyText="No listings in this category yet"
+    >
+      @for (l of filtered(); track l.id) {
+        <app-listing-card [listing]="l" [clickable]="true" (cardClick)="selected.set(l)" />
+      }
+    </app-listing-grid>
 
-      <!-- Infinite-scroll sentinel + status -->
+    @if (!loading()) {
       <div
         appInfiniteScroll
         [appInfiniteScrollDisabled]="loadingMore() || done()"
@@ -100,21 +69,20 @@ const PAGE_SIZE = 9;
             <button class="btn-icon" (click)="selected.set(null)"><i class="fa-solid fa-xmark"></i></button>
           </div>
 
-          <app-rescue-timeline [status]="statusOf(l)" />
+          @if (isEnded(statusOf(l))) {
+            <div class="ended-banner">
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <span>{{ endedMessage(l.status) }}</span>
+            </div>
+          } @else {
+            <app-rescue-timeline [status]="statusOf(l)" />
+          }
 
-          <div class="grid sm:grid-cols-3 gap-3 mt-3">
-            <div class="card-fb p-3">
-              <div class="small-label mb-1">Diet</div>
-              <div class="text-sm">{{ dietLabel(l) }}</div>
-            </div>
-            <div class="card-fb p-3">
-              <div class="small-label mb-1">Meal</div>
-              <div class="text-sm">{{ mealLabel(l) }}</div>
-            </div>
-            <div class="card-fb p-3">
-              <div class="small-label mb-1">Freshness</div>
-              <div class="text-sm">{{ freshnessLabel(l) }}</div>
-            </div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            <app-pill type="quantity" [value]="l.quantityMeals" />
+            <app-pill type="diet" [value]="l.dietType" />
+            <app-pill type="meal" [value]="l.mealType" />
+            <app-pill type="freshness" [value]="l.freshnessTag" />
           </div>
 
           @if (statusOf(l) === 'pending') {
@@ -148,24 +116,104 @@ const PAGE_SIZE = 9;
       margin: auto;
       box-shadow: var(--fb-shadow-lg);
     }
-    .skeleton {
-      border-radius: 8px;
-      background: linear-gradient(90deg, var(--fb-line) 25%, var(--fb-bg) 37%, var(--fb-line) 63%);
-      background-size: 400% 100%;
-      animation: fb-shimmer 1.3s ease-in-out infinite;
+    .ended-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #f1f1f1;
+      color: #7a7a7a;
+      font-size: 14px;
+      font-weight: 500;
     }
-    @keyframes fb-shimmer {
-      0% {
-        background-position: 100% 0;
-      }
-      100% {
-        background-position: -100% 0;
-      }
+    :host-context(body.dark) .ended-banner {
+      background: var(--fb-bg);
+      color: var(--fb-muted);
     }
-    @media (prefers-reduced-motion: reduce) {
-      .skeleton {
-        animation: none;
-      }
+    .ended-banner i {
+      font-size: 18px;
+    }
+    .tab-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1.5px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease;
+    }
+    .tab-pill i {
+      font-size: 0.9em;
+    }
+    /* Per-status colours (match the status badges) */
+    .t-all {
+      color: var(--fb-primary-deep);
+      border-color: var(--fb-primary);
+    }
+    .t-all:hover {
+      background: var(--fb-primary-soft);
+    }
+    .t-all.active {
+      background: var(--fb-primary);
+      border-color: var(--fb-primary);
+      color: #fff;
+    }
+    .t-pending {
+      color: #ea580c;
+      border-color: #ea580c;
+    }
+    .t-pending:hover {
+      background: rgba(234, 88, 12, 0.1);
+    }
+    .t-pending.active {
+      background: #ea580c;
+      border-color: #ea580c;
+      color: #fff;
+    }
+    .t-claimed {
+      color: #d97706;
+      border-color: #d97706;
+    }
+    .t-claimed:hover {
+      background: rgba(217, 119, 6, 0.1);
+    }
+    .t-claimed.active {
+      background: #d97706;
+      border-color: #d97706;
+      color: #fff;
+    }
+    .t-delivered {
+      color: #059669;
+      border-color: #059669;
+    }
+    .t-delivered:hover {
+      background: rgba(5, 150, 105, 0.1);
+    }
+    .t-delivered.active {
+      background: #059669;
+      border-color: #059669;
+      color: #fff;
+    }
+    .t-expired {
+      color: #64748b;
+      border-color: #94a3b8;
+    }
+    .t-expired:hover {
+      background: rgba(100, 116, 139, 0.1);
+    }
+    .t-expired.active {
+      background: #64748b;
+      border-color: #64748b;
+      color: #fff;
     }
   `,
 })
@@ -175,8 +223,21 @@ export class MyListings {
   private readonly router = inject(Router);
 
   protected readonly tabs: Tab[] = ['all', 'pending', 'claimed', 'delivered', 'expired'];
-  protected readonly skeletons = Array.from({ length: 6 });
   protected readonly tab = signal<Tab>('all');
+
+  /** Icon per tab (colour handled by the `.t-*` component styles). */
+  protected readonly tabIcon: Record<Tab, string> = {
+    all: 'fa-solid fa-layer-group',
+    pending: 'fa-solid fa-clock',
+    claimed: 'fa-solid fa-hand',
+    delivered: 'fa-solid fa-truck',
+    expired: 'fa-solid fa-hourglass-end',
+  };
+
+  protected tabClass(t: Tab): string {
+    return `t-${t}${this.tab() === t ? ' active' : ''}`;
+  }
+
   protected readonly selected = signal<ApiListingSummary | null>(null);
   protected readonly listings = signal<ApiListingSummary[]>([]);
   protected readonly loading = signal(true);
@@ -196,9 +257,17 @@ export class MyListings {
       if (tab === 'delivered') {
         return s === 'delivered' || s === 'confirmed';
       }
+      if (tab === 'expired') {
+        return this.isEnded(s);
+      }
       return s === (tab as ListingStatus);
     });
   });
+
+  /** Ended off the happy path (expired / cancelled / rejected). */
+  protected isEnded(s: ListingStatus): boolean {
+    return s === 'expired' || s === 'cancelled' || s === 'rejected';
+  }
 
   constructor() {
     this.loadInitial();
@@ -208,16 +277,18 @@ export class MyListings {
     return toListingStatus(l.status);
   }
 
-  protected dietLabel(l: ApiListingSummary): string {
-    return l.dietType ? DIET_LABELS[l.dietType] : '—';
-  }
-
-  protected mealLabel(l: ApiListingSummary): string {
-    return l.mealType ?? '—';
-  }
-
-  protected freshnessLabel(l: ApiListingSummary): string {
-    return FRESHNESS_LABELS[l.freshnessTag];
+  /** Message for a listing that ended off the happy path (expired/cancelled/rejected). */
+  protected endedMessage(status: ApiListingSummary['status']): string {
+    switch (status) {
+      case 'Cancelled':
+        return 'This listing was cancelled.';
+      case 'Rejected':
+        return 'This listing was rejected.';
+      case 'Expired':
+        return 'This listing’s pickup window expired before it was claimed.';
+      default:
+        return 'This listing is no longer active.';
+    }
   }
 
   protected edit(l: ApiListingSummary): void {

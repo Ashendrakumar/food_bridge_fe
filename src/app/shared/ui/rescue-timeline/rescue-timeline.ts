@@ -89,13 +89,14 @@ export class RescueTimeline {
 
   protected readonly currentIndex = computed(() => {
     const status = this.status();
+    // Expired/cancelled/rejected aren't on the happy path — no active step.
     if (status === 'expired') {
-      return 0;
+      return -1;
     }
     return TIMELINE_STEPS.findIndex((s) => s.status === status);
   });
 
   protected readonly progress = computed(
-    () => (this.currentIndex() / (TIMELINE_STEPS.length - 1)) * 88,
+    () => (Math.max(0, this.currentIndex()) / (TIMELINE_STEPS.length - 1)) * 88,
   );
 }

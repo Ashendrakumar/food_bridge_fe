@@ -1,8 +1,10 @@
+/** Notification — GET /api/notifications (`NotificationResponse`). */
 export interface Notification {
-  id: number | string;
-  userId: number | string;
-  icon: string;
-  text: string;
-  time: string;
-  read: boolean;
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  payloadJson: string | null;
+  isRead: boolean;
+  createdAtUtc: string;
 }

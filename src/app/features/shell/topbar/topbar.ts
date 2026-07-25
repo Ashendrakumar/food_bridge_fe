@@ -1,7 +1,9 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
 import { AuthService } from '@core/services/auth.service';
+import { PickupAddressService } from '@core/services/pickup-address.service';
 import { RoleBadge } from '@shared/ui/role-badge/role-badge';
 import { Avatar } from '@shared/ui/avatar/avatar';
 import { AvailabilityService } from '@core/services/availability.service';
@@ -12,7 +14,7 @@ import { ToastService } from '@core/services/toast.service';
 
 @Component({
   selector: 'app-topbar',
-  imports: [RoleBadge, Avatar],
+  imports: [RoleBadge, Avatar, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './topbar.html',
   styles: `
@@ -41,6 +43,70 @@ import { ToastService } from '@core/services/toast.service';
       cursor: pointer;
       border-radius: 50%;
       display: inline-flex;
+    }
+    .addr-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 42px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--fb-line);
+      background: var(--fb-surface);
+      color: var(--fb-ink);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      max-width: 260px;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .addr-btn:hover {
+      border-color: var(--fb-primary);
+      background: var(--fb-primary-soft);
+    }
+    .dropdown-panel.left-0 {
+      right: auto;
+      left: 0;
+    }
+    .addr-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .addr-item:hover {
+      background: var(--fb-primary-soft);
+    }
+    .addr-item.sel {
+      background: var(--fb-primary-soft);
+    }
+    .addr-x {
+      border: 0;
+      background: transparent;
+      color: var(--fb-muted);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .addr-x:hover {
+      color: #e04434;
+      background: var(--fb-bg);
+    }
+    .addr-input {
+      flex: 1;
+      min-width: 0;
+      border-radius: 10px;
+      border: 1px solid var(--fb-line);
+      padding: 8px 12px;
+      font-size: 13px;
+      background: var(--fb-bg);
+      color: var(--fb-ink);
+      outline: none;
+    }
+    .addr-input:focus {
+      border-color: var(--fb-primary);
     }
     .search-box input {
       border-radius: 12px;
@@ -159,9 +225,13 @@ export class Topbar {
   protected readonly layout = inject(LayoutService);
   protected readonly notifications = inject(NotificationService);
   protected readonly availability = inject(AvailabilityService);
+  protected readonly pickup = inject(PickupAddressService);
 
   protected readonly notifOpen = signal(false);
   protected readonly menuOpen = signal(false);
+  protected readonly addrOpen = signal(false);
+  protected readonly addingAddr = signal(false);
+  protected readonly isDonor = computed(() => this.auth.currentUser()?.role === 'donor');
 
   protected readonly userName = computed(() => this.auth.currentUser()?.name ?? '');
   protected readonly avatarUrl = computed(() => this.auth.currentUser()?.avatarUrl ?? null);
@@ -169,17 +239,55 @@ export class Topbar {
 
   protected toggleNotif(): void {
     this.menuOpen.set(false);
+    this.addrOpen.set(false);
     this.notifOpen.update((open) => !open);
   }
 
   protected toggleMenu(): void {
     this.notifOpen.set(false);
+    this.addrOpen.set(false);
     this.menuOpen.update((open) => !open);
+  }
+
+  protected toggleAddr(): void {
+    this.notifOpen.set(false);
+    this.menuOpen.set(false);
+    this.addrOpen.update((open) => !open);
+  }
+
+  protected selectAddr(id: string): void {
+    this.pickup.select(id);
+    this.addrOpen.set(false);
+  }
+
+  protected removeAddr(id: string, event: Event): void {
+    event.stopPropagation();
+    this.pickup.remove(id);
+  }
+
+  protected addAddr(input: HTMLInputElement): void {
+    const label = input.value.trim();
+    if (!label || this.addingAddr()) {
+      return;
+    }
+    this.addingAddr.set(true);
+    this.pickup.add(label).subscribe({
+      next: () => {
+        this.addingAddr.set(false);
+        input.value = '';
+        this.toast.show('fa-solid fa-location-dot', 'Pickup address added');
+      },
+      error: (err: Error) => {
+        this.addingAddr.set(false);
+        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not add that address');
+      },
+    });
   }
 
   protected closeMenus(): void {
     this.notifOpen.set(false);
     this.menuOpen.set(false);
+    this.addrOpen.set(false);
   }
 
   protected go(view: string): void {

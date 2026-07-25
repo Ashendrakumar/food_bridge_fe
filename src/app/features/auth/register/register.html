@@ -70,7 +70,7 @@
         <app-input class="col-span-12" formControlName="address" placeholder="Address" />
         <app-input class="col-span-6" formControlName="city" placeholder="City" />
         <app-input class="col-span-3" formControlName="state" placeholder="State" />
-        <app-input class="col-span-3" formControlName="pincode" placeholder="Pincode" />
+        <app-input class="col-span-3" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" />
 
         @if (isRecipient()) {
           <div class="col-span-12">
@@ -174,6 +174,7 @@
           <app-input
             type="tel"
             prefix="+91"
+            prefixIcon="fa-solid fa-phone"
             inputmode="numeric"
             autocomplete="tel-national"
             [maxlength]="10"
