@@ -81,32 +81,9 @@ import { ToastService } from '@core/services/toast.service';
     .addr-item.sel {
       background: var(--fb-primary-soft);
     }
-    .addr-x {
-      border: 0;
-      background: transparent;
-      color: var(--fb-muted);
-      cursor: pointer;
-      padding: 2px 6px;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-    .addr-x:hover {
-      color: #e04434;
-      background: var(--fb-bg);
-    }
-    .addr-input {
-      flex: 1;
-      min-width: 0;
-      border-radius: 10px;
-      border: 1px solid var(--fb-line);
-      padding: 8px 12px;
-      font-size: 13px;
-      background: var(--fb-bg);
-      color: var(--fb-ink);
-      outline: none;
-    }
-    .addr-input:focus {
-      border-color: var(--fb-primary);
+    .addr-item a,
+    a.addr-item {
+      text-decoration: none;
     }
     .search-box input {
       border-radius: 12px;
@@ -230,7 +207,6 @@ export class Topbar {
   protected readonly notifOpen = signal(false);
   protected readonly menuOpen = signal(false);
   protected readonly addrOpen = signal(false);
-  protected readonly addingAddr = signal(false);
   protected readonly isDonor = computed(() => this.auth.currentUser()?.role === 'donor');
 
   protected readonly userName = computed(() => this.auth.currentUser()?.name ?? '');
@@ -260,28 +236,10 @@ export class Topbar {
     this.addrOpen.set(false);
   }
 
-  protected removeAddr(id: string, event: Event): void {
-    event.stopPropagation();
-    this.pickup.remove(id);
-  }
-
-  protected addAddr(input: HTMLInputElement): void {
-    const label = input.value.trim();
-    if (!label || this.addingAddr()) {
-      return;
-    }
-    this.addingAddr.set(true);
-    this.pickup.add(label).subscribe({
-      next: () => {
-        this.addingAddr.set(false);
-        input.value = '';
-        this.toast.show('fa-solid fa-location-dot', 'Pickup address added');
-      },
-      error: (err: Error) => {
-        this.addingAddr.set(false);
-        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not add that address');
-      },
-    });
+  /** Manage addresses on the Profile page. */
+  protected goToAddAddress(): void {
+    this.addrOpen.set(false);
+    this.router.navigate([APP_ROUTES.appView('profile')]);
   }
 
   protected closeMenus(): void {

@@ -31,18 +31,14 @@
               <div class="addr-item" [class.sel]="a.id === pickup.selected()?.id" (click)="selectAddr(a.id)">
                 <i class="fa-solid mr-2" [class]="a.id === pickup.selected()?.id ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
                 <span class="flex-1 text-sm truncate">{{ a.label }}</span>
-                <button type="button" class="addr-x" title="Remove" (click)="removeAddr(a.id, $event)"><i class="fa-solid fa-xmark"></i></button>
               </div>
             } @empty {
               <div class="text-muted text-sm px-2 py-1">No saved addresses yet</div>
             }
             <hr class="my-1.5 border-line" />
-            <div class="p-1 flex gap-2">
-              <input #addrInput type="text" class="addr-input" placeholder="Add another address…" (keyup.enter)="addAddr(addrInput)" />
-              <button type="button" class="btn-fb !py-2 !px-3 !text-sm shrink-0" [disabled]="addingAddr()" (click)="addAddr(addrInput)">
-                <i class="fa-solid" [class]="addingAddr() ? 'fa-spinner fa-spin' : 'fa-plus'"></i>
-              </button>
-            </div>
+            <a class="addr-item text-primary-deep font-semibold" (click)="goToAddAddress()">
+              <i class="fa-solid fa-plus mr-2"></i>Add new address
+            </a>
           </div>
         }
       </div>
