@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="fb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d87757"/>
+      <stop offset="1" stop-color="#a94b2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="url(#fb)"/>
+  <!-- Leaf -->
+  <path d="M24 4Q32 13 24 22Q16 13 24 4Z" fill="#fff"/>
+  <path d="M24 7v12" fill="none" stroke="#a94b2f" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Bridge: main cable, deck, hangers -->
+  <g fill="none" stroke="#fff" stroke-linecap="round">
+    <path d="M6 37Q24 25 42 37" stroke-width="2.6"/>
+    <path d="M5 37h38" stroke-width="2.8"/>
+    <path d="M14 37v-4.7M24 37V31M34 37v-4.7" stroke-width="1.8"/>
+  </g>
+</svg>

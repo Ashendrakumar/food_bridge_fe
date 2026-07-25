@@ -1,0 +1,80 @@
+<h3 class="page-title">{{ greeting() }}</h3>
+<p class="page-subtitle">{{ subtitle() }}</p>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+  @for (stat of stats(); track stat.label) {
+    <div class="card-fb stat-card">
+      <div class="stat-icon" [style.background]="stat.color"><i [class]="stat.icon"></i></div>
+      <div class="stat-value">{{ stat.value }}</div>
+      <div class="stat-label">{{ stat.label }}</div>
+    </div>
+  }
+</div>
+
+@switch (role()) {
+  @case ('donor') {
+    <h6 class="section-title">Recent Activity</h6>
+    <div class="card-fb p-3">
+      @for (l of donorRecent(); track l.id) {
+        <div class="flex justify-between items-center py-2.5 border-b border-line last:border-0">
+          <div>
+            <div class="text-sm font-semibold">{{ l.foodType }} · {{ l.mealType }} — {{ l.quantity }}</div>
+            <div class="text-muted text-xs">{{ l.pickupTime }} · {{ l.address }}</div>
+          </div>
+          <app-status-badge [status]="l.status" />
+        </div>
+      } @empty {
+        <app-empty-state icon="fa-solid fa-inbox" text="No recent activity yet" />
+      }
+    </div>
+  }
+  @case ('volunteer') {
+    <div class="flex items-center justify-between mb-3">
+      <h6 class="section-title mb-0">Open Listings Near You</h6>
+      <a [routerLink]="['/app','nearby']" class="fb-link text-sm">View all</a>
+    </div>
+    <div class="grid gap-3 md:grid-cols-2">
+      @for (l of openNearby(); track l.id) {
+        <div class="card-fb p-3">
+          <div class="flex justify-between items-start mb-1">
+            <div class="font-semibold text-sm">{{ l.donor }}</div>
+            <app-status-badge [status]="l.status" />
+          </div>
+          <div class="text-muted text-xs">{{ l.foodType }} · {{ l.quantity }} · {{ l.address }}</div>
+        </div>
+      } @empty {
+        <app-empty-state icon="fa-solid fa-map" text="No open listings right now" />
+      }
+    </div>
+  }
+  @case ('recipient') {
+    <div class="flex items-center justify-between mb-3">
+      <h6 class="section-title mb-0">Incoming Food</h6>
+      <a [routerLink]="['/app','incoming']" class="fb-link text-sm">View all</a>
+    </div>
+    <div class="grid gap-3 md:grid-cols-2">
+      @for (l of incoming(); track l.id) {
+        <div class="card-fb p-3">
+          <div class="font-semibold text-sm">{{ l.foodType }} · {{ l.mealType }} — {{ l.quantity }}</div>
+          <div class="text-muted text-xs">From {{ l.donor }} · via {{ l.volunteer }}</div>
+        </div>
+      } @empty {
+        <app-empty-state icon="fa-solid fa-box-open" text="Nothing incoming right now" />
+      }
+    </div>
+  }
+  @default {
+    <h6 class="section-title">Latest Listings</h6>
+    <div class="card-fb p-3">
+      @for (l of store.listings().slice(0, 6); track l.id) {
+        <div class="flex justify-between items-center py-2.5 border-b border-line last:border-0">
+          <div>
+            <div class="text-sm font-semibold">{{ l.donor }}</div>
+            <div class="text-muted text-xs">{{ l.foodType }} · {{ l.quantity }} · {{ l.volunteer || '—' }}</div>
+          </div>
+          <app-status-badge [status]="l.status" />
+        </div>
+      }
+    </div>
+  }
+}
