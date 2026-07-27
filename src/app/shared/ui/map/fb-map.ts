@@ -16,9 +16,8 @@ import {
 } from '@angular/google-maps';
 import { environment } from '@env/environment';
 import { GoogleMapsLoaderService } from '@core/services/google-maps-loader.service';
+import { ThemeService } from '@core/services/theme.service';
 import { FbLatLng, FbMapConfig, FbMapMarker } from './fb-map.model';
-
-const BRAND_PRIMARY = '#d87757';
 
 /**
  * Reusable, configuration-driven Google Map.
@@ -54,7 +53,7 @@ const BRAND_PRIMARY = '#d87757';
             @if (mode() === 'picker') {
               <map-marker
                 [position]="pickerPosition()"
-                [icon]="pinIcon(BRAND_PRIMARY, '')"
+                [icon]="pinIcon(brandPrimary(), '')"
                 [options]="{ draggable: true }"
                 (mapDragend)="onPickerDrag($event)"
               />
@@ -64,7 +63,7 @@ const BRAND_PRIMARY = '#d87757';
               <map-marker
                 [position]="m.position"
                 [title]="m.title ?? ''"
-                [icon]="pinIcon(m.color ?? BRAND_PRIMARY, m.label ?? '')"
+                [icon]="pinIcon(m.color ?? brandPrimary(), m.label ?? '')"
                 [options]="{ draggable: !!m.draggable }"
               />
             }
@@ -144,7 +143,7 @@ const BRAND_PRIMARY = '#d87757';
       /* Faux-map backdrop (from the HTML sample) shown behind every state. */
       background:
         radial-gradient(circle at 20% 30%, rgba(30, 158, 92, 0.1), transparent 45%),
-        radial-gradient(circle at 80% 75%, rgba(255, 122, 61, 0.12), transparent 45%),
+        radial-gradient(circle at 80% 75%, rgb(var(--fb-accent-rgb) / 0.12), transparent 45%),
         linear-gradient(135deg, #eef3ef, #f6efe9);
       background-color: #eef3ef;
     }
@@ -252,7 +251,10 @@ export class FbMap {
   protected readonly loader = inject(GoogleMapsLoaderService);
   private readonly directionsService = inject(MapDirectionsService);
 
-  protected readonly BRAND_PRIMARY = BRAND_PRIMARY;
+  /** Pins are baked into an SVG data URI, so they need a literal hex rather
+   *  than a CSS var. This signal re-emits when the brand palette changes. */
+  private readonly theme = inject(ThemeService);
+  protected readonly brandPrimary = this.theme.primaryHex;
 
   readonly config = input<FbMapConfig>({});
   /** Emits the chosen coordinates in `picker` mode (drag or click). */

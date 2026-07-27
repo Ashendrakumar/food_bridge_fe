@@ -53,7 +53,7 @@ type PendingAction = { id: string; action: 'pickup' | 'delivery' };
       border: 0;
       border-radius: var(--fb-radius);
       font-weight: 600;
-      background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+      background: linear-gradient(135deg, var(--fb-accent), var(--fb-accent-deep));
     }
     .btn-orange:disabled {
       opacity: 0.6;

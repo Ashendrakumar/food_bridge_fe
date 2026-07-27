@@ -65,7 +65,7 @@ import { Avatar } from '@shared/ui/avatar/avatar';
     .nav-fb a.active {
       background: linear-gradient(135deg, var(--fb-primary), var(--fb-primary-deep));
       color: #fff;
-      box-shadow: 0 6px 16px rgba(182, 92, 63, 0.25);
+      box-shadow: 0 6px 16px var(--fb-glow-primary-deep);
     }
 
     /* User footer + popover */
@@ -105,7 +105,7 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       font-weight: 700;
       font-size: 14px;
       flex-shrink: 0;
-      background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+      background: linear-gradient(135deg, var(--fb-accent), var(--fb-accent-deep));
       object-fit: cover;
     }
     .side-user-info {

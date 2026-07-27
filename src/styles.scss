@@ -5,7 +5,20 @@
 @tailwind utilities;
 
 /* ============================================================
-   Design tokens — sourced from tailwind.config.js via theme().
+   Design tokens.
+
+   BRAND tokens (--fb-primary*, --fb-accent*, --fb-orange*,
+   --fb-glow-*, --fb-wash-*, --fb-ring) are NOT defined here. The
+   plugin in tailwind.config.js emits them once per palette, and
+   ThemeService swaps palettes at runtime by toggling a
+   `theme-<name>` class on <body>. They live together in that one
+   rule on purpose: var() is substituted where a property is
+   *declared*, so a brand token declared here on :root would
+   freeze at the default palette instead of following the class.
+
+   Add brand-derived tokens to `varsFor()` in tailwind.config.js.
+   Non-brand tokens (geometry, neutral surfaces) belong below.
+
    Use these var(--fb-*) tokens (or Tailwind color utilities like
    bg-primary / text-muted) everywhere. Never hard-code hex.
    ============================================================ */
@@ -14,16 +27,10 @@
   --fb-shadow: 0 10px 30px rgba(20, 60, 35, 0.08);
   --fb-shadow-lg: 0 20px 50px rgba(20, 60, 35, 0.14);
 
-  /* Brand palette */
-  --fb-primary: theme('colors.primary.DEFAULT');
-  --fb-primary-deep: theme('colors.primary.deep');
-  --fb-primary-bright: theme('colors.primary.bright');
-  --fb-primary-soft: theme('colors.primary.soft');
+  /* Success is a fixed semantic colour, not part of the brand palette. */
   --fb-success: theme('colors.success.DEFAULT');
   --fb-success-deep: theme('colors.success.deep');
   --fb-success-soft: theme('colors.success.soft');
-  --fb-orange: theme('colors.orange.DEFAULT');
-  --fb-orange-soft: theme('colors.orange.soft');
 
   /* Semantic surfaces — flip automatically in dark mode */
   --fb-surface: #ffffff;
@@ -31,9 +38,6 @@
   --fb-ink: theme('colors.ink');
   --fb-muted: theme('colors.muted');
   --fb-line: theme('colors.line');
-
-  /* Focus ring */
-  --fb-ring: 0 0 0 3px var(--fb-primary-soft);
 }
 
 body.dark {
@@ -42,7 +46,6 @@ body.dark {
   --fb-ink: theme('colors.ink-dark');
   --fb-muted: theme('colors.muted-dark');
   --fb-line: theme('colors.line-dark');
-  --fb-primary-soft: rgba(216, 119, 87, 0.16);
 }
 
 html,
@@ -78,8 +81,8 @@ body {
   .fb-auth-wrap {
     @apply min-h-dvh flex items-center justify-center relative p-5;
     background:
-      radial-gradient(circle at 15% 20%, rgba(226, 144, 108, 0.18), transparent 40%),
-      radial-gradient(circle at 85% 80%, rgba(255, 122, 61, 0.16), transparent 40%), var(--fb-bg);
+      radial-gradient(circle at 15% 20%, var(--fb-wash-primary), transparent 40%),
+      radial-gradient(circle at 85% 80%, var(--fb-wash-accent), transparent 40%), var(--fb-bg);
   }
 
   /* Frosted-glass card */
@@ -100,14 +103,14 @@ body {
   .fb-brand-logo {
     @apply w-16 h-16 flex items-center justify-center text-white text-[28px] mx-auto mb-[18px] bg-gradient-primary;
     border-radius: 20px;
-    box-shadow: 0 10px 24px rgba(216, 119, 87, 0.3);
+    box-shadow: 0 10px 24px var(--fb-glow-primary);
   }
 
   /* Buttons */
   .btn-fb {
     @apply inline-flex items-center justify-center text-white rounded-fb-btn font-semibold px-6 py-3 bg-gradient-primary transition-transform duration-150;
     border: 1px solid transparent;
-    box-shadow: 0 8px 20px rgba(182, 92, 63, 0.25);
+    box-shadow: 0 8px 20px var(--fb-glow-primary-deep);
   }
   .btn-fb:hover {
     @apply -translate-y-0.5 text-white;
@@ -232,7 +235,7 @@ body {
   /* Avatar */
   .avatar-circle {
     @apply w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm;
-    background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+    background: linear-gradient(135deg, var(--fb-accent), var(--fb-accent-deep));
   }
 
   /* Stat cards */

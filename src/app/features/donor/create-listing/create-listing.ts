@@ -102,7 +102,7 @@ interface NearbyReceiver {
         <!-- Tips -->
         <div class="card-fb p-5">
           <div class="flex items-center gap-3 mb-3">
-            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-orange),#e8621f)"><i class="fa-solid fa-lightbulb"></i></div>
+            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-accent),var(--fb-accent-deep))"><i class="fa-solid fa-lightbulb"></i></div>
             <div class="font-bold">Tips for a great listing</div>
           </div>
           <ul class="text-sm space-y-2 m-0 p-0 list-none">

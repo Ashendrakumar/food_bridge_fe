@@ -43,8 +43,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       color: #fff;
         font-size: 1.1rem;
       justify-content: center;
-      background: linear-gradient(135deg, var(--fb-primary-bright, #d87757), var(--fb-primary-deep, #a94b2f));
-      box-shadow: 0 8px 18px rgba(182, 92, 63, 0.35);
+      background: linear-gradient(135deg, var(--fb-primary-bright), var(--fb-primary-deep));
+      box-shadow: 0 8px 18px rgb(var(--fb-primary-deep-rgb) / 0.35);
       flex-shrink: 0;
     }
     .fb-logo-word {

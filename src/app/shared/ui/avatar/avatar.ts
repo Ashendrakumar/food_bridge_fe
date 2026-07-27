@@ -39,7 +39,7 @@ import { initials as toInitials } from '@shared/util/initials';
       font-weight: 700;
       line-height: 1;
       overflow: hidden;
-      background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+      background: linear-gradient(135deg, var(--fb-primary), var(--fb-primary-deep));
       user-select: none;
     }
     .avatar img {
