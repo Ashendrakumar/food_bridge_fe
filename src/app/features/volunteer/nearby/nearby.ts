@@ -1,9 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
 import { ApiNearbyListing, DIET_LABELS, FRESHNESS_LABELS } from '@core/models/listing-api.model';
 import { AuthService } from '@core/services/auth.service';
+import { GeolocationService } from '@core/services/geolocation.service';
 import { ListingService } from '@core/services/listing.service';
 import { ToastService } from '@core/services/toast.service';
 import { UserService } from '@core/services/user.service';
@@ -39,12 +40,26 @@ const PAGE_SIZE = 12;
         </div>
         <div>
           <div class="font-bold"><span class="text-success-deep">{{ listings().length }}</span> open listings loaded</div>
-          <div class="text-muted text-xs">Within {{ radiusKm }} km · pending pickups only</div>
+          <div class="text-muted text-xs">
+            Within {{ radiusKm }} km · pending pickups only
+          </div>
+          <div class="text-xs mt-0.5 flex items-center gap-1" [class.text-success-deep]="locationSource() === 'gps'" [class.text-muted]="locationSource() !== 'gps'">
+            @if (locating()) {
+              <i class="fa-solid fa-spinner fa-spin"></i><span>Finding your location…</span>
+            } @else {
+              <i class="fa-solid" [class]="locationSource() === 'gps' ? 'fa-location-crosshairs' : 'fa-location-dot'"></i><span>{{ locationLabel() }}</span>
+            }
+          </div>
         </div>
       </div>
-      <button class="btn-fb-outline !py-1.5 !px-3 !text-sm" [disabled]="loading()" (click)="reload()">
-        <i class="fa-solid fa-rotate mr-1" [class.fa-spin]="loading()"></i>Refresh
-      </button>
+      <div class="flex gap-2">
+        <button class="btn-fb-outline !py-1.5 !px-3 !text-sm" [disabled]="locating()" (click)="locateAndLoad()" title="Re-centre on your current location">
+          <i class="fa-solid fa-location-crosshairs mr-1" [class.fa-spin]="locating()"></i>Use current location
+        </button>
+        <button class="btn-fb-outline !py-1.5 !px-3 !text-sm" [disabled]="loading()" (click)="reload()">
+          <i class="fa-solid fa-rotate mr-1" [class.fa-spin]="loading()"></i>Refresh
+        </button>
+      </div>
     </div>
 
     @if (view() === 'card') {
@@ -126,6 +141,7 @@ export class Nearby {
   private readonly listingService = inject(ListingService);
   private readonly users = inject(UserService);
   private readonly auth = inject(AuthService);
+  private readonly geo = inject(GeolocationService);
   private readonly deliveries = inject(VolunteerDeliveriesStore);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -138,27 +154,73 @@ export class Nearby {
   protected readonly loadingMore = signal(false);
   protected readonly done = signal(false);
   protected readonly claimingId = signal<string | null>(null);
+  /** Where the feed is currently centred, so the volunteer knows what "nearby" means. */
+  protected readonly locating = signal(true);
+  protected readonly locationSource = signal<'gps' | 'profile' | 'default'>('default');
 
   private center = { lat: environment.mapDefaultCenter.lat, lng: environment.mapDefaultCenter.lng };
   private page = 1;
 
   constructor() {
-    // Prefer the volunteer's saved location; fall back to the map default centre.
-    const id = this.auth.currentUser()?.id;
-    if (id) {
-      this.users.getProfile(id).subscribe({
-        next: (p) => {
-          if (p.latitude != null && p.longitude != null) {
-            this.center = { lat: p.latitude, lng: p.longitude };
-          }
-          this.reload();
-        },
-        error: () => this.reload(),
-      });
-    } else {
-      this.reload();
-    }
+    this.locateAndLoad();
   }
+
+  /**
+   * Centre the feed on where the volunteer actually is: try live GPS first, then their
+   * saved profile location, then the map default — reloading listings once resolved.
+   */
+  protected locateAndLoad(): void {
+    this.locating.set(true);
+    this.loading.set(true);
+    this.geo.current().subscribe({
+      next: (loc) => {
+        this.center = { lat: loc.lat, lng: loc.lng };
+        this.locationSource.set('gps');
+        this.locating.set(false);
+        this.reload();
+      },
+      error: () => this.fallbackLocate(),
+    });
+  }
+
+  /** GPS unavailable/denied → use the saved profile location, else the map default. */
+  private fallbackLocate(): void {
+    const id = this.auth.currentUser()?.id;
+    if (!id) {
+      this.locationSource.set('default');
+      this.locating.set(false);
+      this.reload();
+      return;
+    }
+    this.users.getProfile(id).subscribe({
+      next: (p) => {
+        if (p.latitude != null && p.longitude != null) {
+          this.center = { lat: p.latitude, lng: p.longitude };
+          this.locationSource.set('profile');
+        } else {
+          this.locationSource.set('default');
+        }
+        this.locating.set(false);
+        this.reload();
+      },
+      error: () => {
+        this.locationSource.set('default');
+        this.locating.set(false);
+        this.reload();
+      },
+    });
+  }
+
+  protected readonly locationLabel = computed(() => {
+    switch (this.locationSource()) {
+      case 'gps':
+        return 'Using your current location';
+      case 'profile':
+        return 'Using your saved location';
+      default:
+        return 'Using the default area';
+    }
+  });
 
   protected dietLabel(l: ApiNearbyListing): string {
     return l.dietType ? DIET_LABELS[l.dietType] : '—';

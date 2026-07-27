@@ -27,6 +27,12 @@ export const API_ENDPOINTS = {
     avatar: (id: Id) => `users/${id}/avatar`,
   },
 
+  // Donor saved pickup addresses (DonorOnly, self)
+  donorAddresses: {
+    base: 'donor-addresses',
+    byId: (id: Id) => `donor-addresses/${id}`,
+  },
+
   // 3–6. Listings (donor, volunteer, recipient) + tracking
   listings: {
     base: 'listings',

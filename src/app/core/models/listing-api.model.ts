@@ -104,7 +104,13 @@ export interface ApiNearbyListing {
   distanceKm: number;
 }
 
-/** Request body for POST /listings and PUT /listings/{id}. */
+/**
+ * Request body for POST /listings and PUT /listings/{id}.
+ *
+ * Pickup location is either/or: supply `donorAddressId` (a saved address from the
+ * caller's own address book) OR the freeform `pickupAddress`/`latitude`/`longitude`
+ * trio — never both, never neither (enforced server-side).
+ */
 export interface ListingWriteBody {
   title: string;
   foodType: string;
@@ -114,9 +120,10 @@ export interface ListingWriteBody {
   freshnessTag: FreshnessTag;
   preparedAtUtc: string | null;
   pickupDeadlineUtc: string;
-  pickupAddress: string;
-  latitude: number;
-  longitude: number;
+  donorAddressId?: string;
+  pickupAddress?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const DIET_LABELS: Record<DietType, string> = {
