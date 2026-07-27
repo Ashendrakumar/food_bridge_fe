@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
 import { ApiListingSummary, toListingStatus } from '@core/models/listing-api.model';
-import { ListingStatus } from '@core/models/listing.model';
+import { ListingStatus, STATUS_ICONS, STATUS_LABELS } from '@core/models/listing.model';
 import { ListingService } from '@core/services/listing.service';
 import { ToastService } from '@core/services/toast.service';
 import { InfiniteScroll } from '@shared/directives/infinite-scroll.directive';
@@ -12,7 +12,7 @@ import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
 import { Pill } from '@shared/ui/pill/pill';
 import { RescueTimeline } from '@shared/ui/rescue-timeline/rescue-timeline';
 
-type Tab = 'all' | 'pending' | 'claimed' | 'delivered' | 'expired';
+type Tab = 'all' | ListingStatus;
 
 const PAGE_SIZE = 9;
 
@@ -27,7 +27,7 @@ const PAGE_SIZE = 9;
     <div class="flex flex-wrap gap-2 mb-4">
       @for (t of tabs; track t) {
         <button [class]="'tab-pill ' + tabClass(t)" (click)="tab.set(t)">
-          <i [class]="tabIcon[t]"></i><span class="capitalize">{{ t }}</span>
+          <i [class]="tabIcon[t]"></i><span>{{ tabLabel[t] }}</span>
         </button>
       }
     </div>
@@ -215,6 +215,54 @@ const PAGE_SIZE = 9;
       border-color: #64748b;
       color: #fff;
     }
+    .t-pickedup {
+      color: #4f46e5;
+      border-color: #6366f1;
+    }
+    .t-pickedup:hover {
+      background: rgba(79, 70, 229, 0.1);
+    }
+    .t-pickedup.active {
+      background: #4f46e5;
+      border-color: #4f46e5;
+      color: #fff;
+    }
+    .t-confirmed {
+      color: #0d9488;
+      border-color: #14b8a6;
+    }
+    .t-confirmed:hover {
+      background: rgba(13, 148, 136, 0.1);
+    }
+    .t-confirmed.active {
+      background: #0d9488;
+      border-color: #0d9488;
+      color: #fff;
+    }
+    .t-cancelled {
+      color: #dc2626;
+      border-color: #ef4444;
+    }
+    .t-cancelled:hover {
+      background: rgba(220, 38, 38, 0.1);
+    }
+    .t-cancelled.active {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #fff;
+    }
+    .t-rejected {
+      color: #e11d48;
+      border-color: #f43f5e;
+    }
+    .t-rejected:hover {
+      background: rgba(225, 29, 72, 0.1);
+    }
+    .t-rejected.active {
+      background: #e11d48;
+      border-color: #e11d48;
+      color: #fff;
+    }
   `,
 })
 export class MyListings {
@@ -222,16 +270,29 @@ export class MyListings {
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
-  protected readonly tabs: Tab[] = ['all', 'pending', 'claimed', 'delivered', 'expired'];
+  protected readonly tabs: Tab[] = [
+    'all',
+    'pending',
+    'claimed',
+    'pickedup',
+    'delivered',
+    'confirmed',
+    'expired',
+    'cancelled',
+    'rejected',
+  ];
   protected readonly tab = signal<Tab>('all');
 
   /** Icon per tab (colour handled by the `.t-*` component styles). */
   protected readonly tabIcon: Record<Tab, string> = {
     all: 'fa-solid fa-layer-group',
-    pending: 'fa-solid fa-clock',
-    claimed: 'fa-solid fa-hand',
-    delivered: 'fa-solid fa-truck',
-    expired: 'fa-solid fa-hourglass-end',
+    ...STATUS_ICONS,
+  };
+
+  /** Label per tab. */
+  protected readonly tabLabel: Record<Tab, string> = {
+    all: 'All',
+    ...STATUS_LABELS,
   };
 
   protected tabClass(t: Tab): string {
@@ -249,19 +310,10 @@ export class MyListings {
 
   protected readonly filtered = computed(() => {
     const tab = this.tab();
-    return this.listings().filter((l) => {
-      const s = this.statusOf(l);
-      if (tab === 'all') {
-        return true;
-      }
-      if (tab === 'delivered') {
-        return s === 'delivered' || s === 'confirmed';
-      }
-      if (tab === 'expired') {
-        return this.isEnded(s);
-      }
-      return s === (tab as ListingStatus);
-    });
+    if (tab === 'all') {
+      return this.listings();
+    }
+    return this.listings().filter((l) => this.statusOf(l) === tab);
   });
 
   /** Ended off the happy path (expired / cancelled / rejected). */
