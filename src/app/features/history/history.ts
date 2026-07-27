@@ -1,12 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ApiListingSummary } from '@core/models/listing-api.model';
 import { AuthService } from '@core/services/auth.service';
-import { ListingStore } from '@core/services/listing-store.service';
+import { RecipientService } from '@core/services/recipient.service';
+import { ToastService } from '@core/services/toast.service';
 import { EmptyState } from '@shared/ui/empty-state/empty-state';
-import { StatusBadge } from '@shared/ui/status-badge/status-badge';
+import { ListingCard } from '@shared/ui/listing-card/listing-card';
+import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
 
 @Component({
   selector: 'app-history',
-  imports: [StatusBadge, EmptyState],
+  imports: [EmptyState, ListingCard, ListingGrid, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h3 class="page-title">{{ isVolunteer() ? 'Delivery History' : 'Distribution History' }}</h3>
@@ -14,39 +18,58 @@ import { StatusBadge } from '@shared/ui/status-badge/status-badge';
       {{ isVolunteer() ? 'Every completed delivery, all in one place.' : 'Meals your organization has received.' }}
     </p>
 
-    <div class="card-fb p-3">
-      @for (l of rows(); track l.id) {
-        <div class="flex justify-between items-center py-2.5 border-b border-line last:border-0">
-          <div>
-            @if (isVolunteer()) {
-              <div class="text-sm font-semibold">{{ l.donor }} → {{ l.recipient }}</div>
-              <div class="text-muted text-xs">{{ l.foodType }} · {{ l.quantity }}</div>
-            } @else {
-              <div class="text-sm font-semibold">{{ l.foodType }} — {{ l.quantity }}</div>
-              <div class="text-muted text-xs">From {{ l.donor }} · via {{ l.volunteer }}</div>
-            }
-          </div>
-          <app-status-badge [status]="l.status" />
-        </div>
-      } @empty {
-        <app-empty-state icon="fa-solid fa-clock-rotate-left" text="No completed history yet" />
-      }
-    </div>
+    @if (isVolunteer()) {
+      <app-empty-state
+        icon="fa-solid fa-ranking-star"
+        text="See your completed deliveries and points on the Leaderboard."
+      />
+    } @else {
+      <app-listing-grid
+        [loading]="loading()"
+        [empty]="!rows().length"
+        emptyIcon="fa-solid fa-clock-rotate-left"
+        emptyText="No completed history yet"
+      >
+        @for (l of rows(); track l.id) {
+          <app-listing-card
+            [listing]="l"
+            icon="fa-solid fa-hand-holding-heart"
+            iconBg="linear-gradient(135deg, var(--fb-success), var(--fb-success-deep))"
+            [deadline]="false"
+            [hasFooter]="true"
+          >
+            <div cardFooter class="text-muted text-xs">
+              <i class="fa-regular fa-calendar-check mr-1"></i>Received {{ l.createdAtUtc | date: 'MMM d, y' }}
+            </div>
+          </app-listing-card>
+        }
+      </app-listing-grid>
+    }
   `,
 })
 export class History {
   private readonly auth = inject(AuthService);
-  private readonly store = inject(ListingStore);
+  private readonly recipientService = inject(RecipientService);
+  private readonly toast = inject(ToastService);
 
   protected readonly isVolunteer = computed(() => this.auth.currentUser()?.role === 'volunteer');
+  protected readonly rows = signal<ApiListingSummary[]>([]);
+  protected readonly loading = signal(true);
 
-  protected readonly rows = computed(() => {
-    const me = this.auth.currentUser()?.name;
+  constructor() {
     if (this.isVolunteer()) {
-      return this.store
-        .listings()
-        .filter((l) => l.volunteer === me && (l.status === 'delivered' || l.status === 'confirmed'));
+      this.loading.set(false);
+      return;
     }
-    return this.store.listings().filter((l) => l.recipient === me && l.status === 'confirmed');
-  });
+    this.recipientService.history().subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
+        this.loading.set(false);
+      },
+      error: (err: Error) => {
+        this.loading.set(false);
+        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not load history');
+      },
+    });
+  }
 }

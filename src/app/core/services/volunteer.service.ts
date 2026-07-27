@@ -1,27 +1,22 @@
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_ENDPOINTS } from '@core/config/api-endpoints';
-import { ApiService } from '@core/http/api.service';
+import { ApiService, QueryParams } from '@core/http/api.service';
 import { LeaderboardEntry } from '@core/models/leaderboard.model';
-import { Listing } from '@core/models/listing.model';
 
-/** Volunteer data endpoints (deliveries, history, leaderboard). */
+/** Volunteer data endpoints (Phase 8): leaderboard + the caller's own rank. */
 @Injectable({ providedIn: 'root' })
 export class VolunteerService {
   private readonly api = inject(ApiService);
 
-  /** Active deliveries (claimed / picked-up). */
-  deliveries(id: string | number): Observable<Listing[]> {
-    return this.api.get<Listing[]>(API_ENDPOINTS.volunteers.deliveries(id));
+  /** Volunteers ranked by total points, descending. */
+  leaderboard(page = 1, pageSize = 50): Observable<LeaderboardEntry[]> {
+    const params: QueryParams = { page, pageSize };
+    return this.api.get<LeaderboardEntry[]>(API_ENDPOINTS.leaderboard.base, params);
   }
 
-  /** Completed deliveries. */
-  history(id: string | number): Observable<Listing[]> {
-    return this.api.get<Listing[]>(API_ENDPOINTS.volunteers.history(id));
-  }
-
-  /** Ranked volunteers by points. */
-  leaderboard(): Observable<LeaderboardEntry[]> {
-    return this.api.get<LeaderboardEntry[]>(API_ENDPOINTS.volunteers.leaderboard);
+  /** The caller's own entry (null if they have no deliveries yet). */
+  myRank(): Observable<LeaderboardEntry | null> {
+    return this.api.get<LeaderboardEntry | null>(API_ENDPOINTS.leaderboard.me);
   }
 }

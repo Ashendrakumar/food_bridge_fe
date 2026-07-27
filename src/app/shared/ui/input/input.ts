@@ -19,6 +19,7 @@ export type FbInputType =
   | 'url'
   | 'date'
   | 'time'
+  | 'datetime-local'
   | 'textarea'
   | 'select';
 
@@ -55,12 +56,24 @@ let uid = 0;
       </label>
     }
 
-    <div class="fb-control" [class.has-icon]="icon()" [class.has-prefix]="prefix()">
+    <div
+      class="fb-control"
+      [class.has-icon]="icon()"
+      [class.has-prefix]="prefix() || prefixIcon()"
+      [class.has-prefix-lg]="prefix() && prefixIcon()"
+    >
       @if (icon()) {
         <i [class]="icon()" class="fb-control-icon"></i>
       }
-      @if (prefix()) {
-        <span class="fb-control-prefix">{{ prefix() }}</span>
+      @if (prefix() || prefixIcon()) {
+        <span class="fb-control-prefix">
+          @if (prefixIcon()) {
+            <i [class]="prefixIcon()"></i>
+          }
+          @if (prefix()) {
+            <span>{{ prefix() }}</span>
+          }
+        </span>
       }
 
       @switch (type()) {
@@ -172,6 +185,9 @@ let uid = 0;
     .has-prefix .fb-field {
       padding-left: 58px;
     }
+    .has-prefix-lg .fb-field {
+      padding-left: 74px;
+    }
     .fb-control-prefix {
       position: absolute;
       left: 0;
@@ -179,11 +195,15 @@ let uid = 0;
       bottom: 0;
       display: flex;
       align-items: center;
+      gap: 6px;
       padding: 0 12px;
       color: var(--fb-muted);
       font-size: 13px;
       font-weight: 600;
       border-right: 1px solid var(--fb-line);
+    }
+    .fb-control-prefix i {
+      color: var(--fb-primary);
     }
     .fb-msg {
       margin: 6px 2px 0;
@@ -202,6 +222,7 @@ export class FbInput implements ControlValueAccessor {
   readonly label = input<string>('');
   readonly placeholder = input<string>('');
   readonly hint = input<string>('');
+  readonly prefixIcon = input<string>('');
   readonly error = input<string>('');
   readonly icon = input<string>('');
   readonly prefix = input<string>('');

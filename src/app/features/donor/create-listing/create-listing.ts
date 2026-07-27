@@ -1,32 +1,24 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  input,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
-import {
-  DietType,
-  FreshnessTag,
-  ListingWriteBody,
-  MealType,
-} from '@core/models/listing-api.model';
+import { DietType, FreshnessTag, ListingWriteBody, MealType } from '@core/models/listing-api.model';
+import { DonorReport } from '@core/models/report.model';
 import { ListingService } from '@core/services/listing.service';
+import { PickupAddressService } from '@core/services/pickup-address.service';
+import { ReportService } from '@core/services/report.service';
 import { ToastService } from '@core/services/toast.service';
 import { FbButton } from '@shared/ui/button/button';
 import { FbInput, FbSelectOption } from '@shared/ui/input/input';
-import { FbMap } from '@shared/ui/map/fb-map';
-import { FbLatLng, FbMapConfig } from '@shared/ui/map/fb-map.model';
-import { environment } from '@env/environment';
+
+interface NearbyReceiver {
+  name: string;
+  dist: number;
+}
 
 @Component({
   selector: 'app-create-listing',
-  imports: [ReactiveFormsModule, FbMap, FbInput, FbButton],
+  imports: [ReactiveFormsModule, FbInput, FbButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h3 class="page-title">{{ editId() ? 'Edit' : 'Create' }} Food Listing</h3>
@@ -34,25 +26,28 @@ import { environment } from '@env/environment';
 
     <div class="grid gap-4 xl:grid-cols-3">
       <form [formGroup]="form" class="card-fb p-5 xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Pickup address (chosen from the top bar) -->
         <div class="col-span-2">
-          <app-input
-            label="Title"
-            formControlName="title"
-            placeholder="e.g. Surplus Wedding Catering"
-            [required]="true"
-            hint="A short summary volunteers see first."
-            [error]="err('title')"
-          />
+          <label class="small-label mb-2 block">Pickup Address <span class="text-red-500">*</span></label>
+          @if (activeAddress(); as a) {
+            <div class="addr-banner">
+              <i class="fa-solid fa-location-dot text-primary"></i>
+              <span class="flex-1 text-sm font-medium truncate">{{ a.label }}</span>
+              <span class="text-muted text-xs hidden sm:inline">Change in the top bar ↑</span>
+            </div>
+          } @else {
+            <div class="addr-banner is-empty">
+              <i class="fa-solid fa-triangle-exclamation text-orange"></i>
+              <span class="flex-1 text-sm">Choose a pickup address from the top-bar selector ↑</span>
+            </div>
+          }
+        </div>
+
+        <div class="col-span-2">
+          <app-input label="Title" formControlName="title" placeholder="e.g. Surplus Wedding Catering" [required]="true" hint="A short summary volunteers see first." [error]="err('title')" />
         </div>
         <div class="col-span-2 sm:col-span-1">
-          <app-input
-            label="Food Type"
-            formControlName="foodType"
-            placeholder="e.g. Mixed Veg Meals"
-            [required]="true"
-            hint="e.g. mixed veg meals, sandwiches, rice & curry."
-            [error]="err('foodType')"
-          />
+          <app-input label="Food Type" formControlName="foodType" placeholder="e.g. Mixed Veg Meals" [required]="true" hint="e.g. mixed veg meals, sandwiches, rice & curry." [error]="err('foodType')" />
         </div>
         <div class="col-span-2 sm:col-span-1">
           <label class="small-label mb-2 block">Diet</label>
@@ -65,57 +60,13 @@ import { environment } from '@env/environment';
           <app-input type="select" label="Meal Type" [options]="mealOptions" formControlName="mealType" />
         </div>
         <div class="col-span-2 sm:col-span-1">
-          <app-input
-            type="number"
-            label="Quantity (meals)"
-            formControlName="quantityMeals"
-            placeholder="e.g. 50"
-            [required]="true"
-            hint="Approximate number of meals available."
-            [error]="err('quantityMeals')"
-          />
+          <app-input type="number" label="Quantity (meals)" formControlName="quantityMeals" placeholder="e.g. 50" [required]="true" hint="Approximate number of meals available." [error]="err('quantityMeals')" />
         </div>
         <div class="col-span-2 sm:col-span-1">
-          <app-input
-            type="select"
-            label="Freshness"
-            [options]="freshnessOptions"
-            formControlName="freshnessTag"
-            [required]="true"
-            hint="How recently the food was prepared or packed."
-          />
+          <app-input type="select" label="Freshness" [options]="freshnessOptions" formControlName="freshnessTag" [required]="true" hint="How recently the food was prepared or packed." />
         </div>
         <div class="col-span-2 sm:col-span-1">
-          <label class="small-label mb-2 block">Pickup deadline<span class="text-red-500"> *</span></label>
-          <input type="datetime-local" class="fb-field w-full" formControlName="pickupDeadline" />
-          @if (err('pickupDeadline')) {
-            <p class="text-red-500 text-xs mt-1.5">{{ err('pickupDeadline') }}</p>
-          } @else {
-            <p class="fb-help">Latest time a volunteer can collect it.</p>
-          }
-        </div>
-        <div class="col-span-2">
-          <app-input
-            label="Pickup Address"
-            formControlName="pickupAddress"
-            placeholder="e.g. C.G. Road, Navrangpura"
-            [required]="true"
-            hint="Where the volunteer should come to collect."
-            [error]="err('pickupAddress')"
-          />
-        </div>
-        <div class="col-span-2">
-          <label class="small-label mb-2 block">Pickup location <span class="text-red-500">*</span></label>
-          <app-fb-map
-            class="block"
-            [config]="locationConfig()"
-            (locationChange)="onLocationPicked($event)"
-          />
-          @if (locationError()) {
-            <p class="text-red-500 text-xs mt-1.5">{{ locationError() }}</p>
-          } @else {
-            <p class="fb-help">Drag the pin or tap the map to mark the exact pickup spot.</p>
-          }
+          <app-input type="datetime-local" label="Pickup Deadline" formControlName="pickupDeadline" [required]="true" hint="Latest time a volunteer can collect it." [error]="err('pickupDeadline')" />
         </div>
         <div class="col-span-2">
           <div class="map-placeholder !h-28 cursor-pointer" (click)="photoInput.click()">
@@ -131,24 +82,87 @@ import { environment } from '@env/environment';
         </div>
       </form>
 
-      <div class="card-fb p-5">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-success),var(--fb-success-deep))">
-            <i class="fa-solid fa-lightbulb"></i>
+      <div class="flex flex-col gap-4">
+        <!-- Your impact so far -->
+        <div class="card-fb p-5">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-success),var(--fb-success-deep))"><i class="fa-solid fa-seedling"></i></div>
+            <div>
+              <div class="font-bold">Your impact so far</div>
+              <div class="text-muted text-xs">Every listing counts</div>
+            </div>
           </div>
-          <div class="font-bold">Tips for a great listing</div>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div><div class="impact-num">{{ impact()?.totalMealsDonated ?? 0 }}</div><div class="text-muted text-[11px]">Meals saved</div></div>
+            <div><div class="impact-num">{{ impact()?.totalCertificates ?? 0 }}</div><div class="text-muted text-[11px]">Donations</div></div>
+            <div><div class="impact-num">{{ co2() }}kg</div><div class="text-muted text-[11px]">CO₂ saved</div></div>
+          </div>
         </div>
-        <ul class="text-sm space-y-2 m-0 p-0 list-none">
-          <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Add a clear photo so volunteers know what to expect.</span></li>
-          <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Give an accurate meal count and a realistic pickup deadline.</span></li>
-          <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Pin the exact pickup spot on the map.</span></li>
-        </ul>
+
+        <!-- Tips -->
+        <div class="card-fb p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-orange),#e8621f)"><i class="fa-solid fa-lightbulb"></i></div>
+            <div class="font-bold">Tips for a great listing</div>
+          </div>
+          <ul class="text-sm space-y-2 m-0 p-0 list-none">
+            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Add a clear photo so volunteers know what to expect.</span></li>
+            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Give an accurate meal count and a realistic pickup deadline.</span></li>
+            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>List fresh food early for faster pickups.</span></li>
+          </ul>
+        </div>
+
+        <!-- Waiting nearby -->
+        <div class="card-fb p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <div class="stat-icon !mb-0" style="background:var(--fb-primary)"><i class="fa-solid fa-hand-holding-heart"></i></div>
+              <div class="font-bold">Waiting nearby</div>
+            </div>
+            <span class="badge-fb bg-primary-soft text-primary-deep">{{ nearby.length }} Active</span>
+          </div>
+          <div class="space-y-2.5">
+            @for (r of nearby; track r.name) {
+              <div class="flex items-center gap-3">
+                <div class="avatar-circle !w-8 !h-8 !text-xs">{{ r.name.charAt(0) }}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-semibold truncate">{{ r.name }}</div>
+                  <div class="text-muted text-xs">{{ r.dist }} km away</div>
+                </div>
+                <i class="fa-solid fa-location-dot text-muted text-xs"></i>
+              </div>
+            }
+          </div>
+        </div>
       </div>
     </div>
+  `,
+  styles: `
+    .addr-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--fb-primary-soft);
+      border: 1px solid var(--fb-primary);
+    }
+    .addr-banner.is-empty {
+      background: var(--fb-orange-soft);
+      border-color: var(--fb-orange);
+    }
+    .impact-num {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--fb-primary-deep);
+      line-height: 1.1;
+    }
   `,
 })
 export class CreateListing {
   private readonly listingService = inject(ListingService);
+  private readonly reportService = inject(ReportService);
+  protected readonly pickup = inject(PickupAddressService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -170,27 +184,26 @@ export class CreateListing {
     { value: 'Packaged', label: 'Packaged' },
   ];
 
-  /** Pickup location pinned on the map (null until chosen). */
-  protected readonly pickupLocation = signal<FbLatLng | null>(null);
+  protected readonly nearby: NearbyReceiver[] = [
+    { name: 'Hope Community Kitchen', dist: 1.2 },
+    { name: 'Sunrise Shelter', dist: 2.6 },
+    { name: 'Asha Foundation', dist: 3.4 },
+  ];
+
   private photoFile: File | null = null;
   protected readonly photoName = signal('');
+  protected readonly impact = signal<DonorReport | null>(null);
+  protected readonly co2 = computed(() => Math.round((this.impact()?.totalMealsDonated ?? 0) * 0.45));
 
-  /** Per-field validation messages shown beneath each input. */
+  /** Pickup address used for the listing — the edited listing's, else the top-bar selection. */
+  private readonly editAddress = signal<{ label: string; latitude: number; longitude: number; } | null>(null);
+  protected readonly activeAddress = computed(() => this.editAddress() ?? this.pickup.selected());
+
   protected readonly fieldErrors = signal<Record<string, string>>({});
-  protected readonly locationError = signal('');
 
   protected err(field: string): string {
     return this.fieldErrors()[field] ?? '';
   }
-
-  protected readonly locationConfig = computed<FbMapConfig>(() => ({
-    mode: 'picker',
-    height: 220,
-    zoom: 15,
-    initialLocation: this.pickupLocation() ?? environment.mapDefaultCenter,
-    clickToPlace: true,
-    placeholderText: 'Pin the pickup location',
-  }));
 
   protected readonly form = new FormGroup({
     title: new FormControl('', { nonNullable: true }),
@@ -200,10 +213,14 @@ export class CreateListing {
     quantityMeals: new FormControl('', { nonNullable: true }),
     freshnessTag: new FormControl<FreshnessTag>('JustCooked', { nonNullable: true }),
     pickupDeadline: new FormControl('', { nonNullable: true }),
-    pickupAddress: new FormControl('', { nonNullable: true }),
   });
 
   constructor() {
+    this.reportService.donor().subscribe({
+      next: (r) => this.impact.set(r),
+      error: () => undefined,
+    });
+
     effect(() => {
       const id = this.edit();
       if (!id) {
@@ -220,18 +237,13 @@ export class CreateListing {
             quantityMeals: String(l.quantityMeals),
             freshnessTag: l.freshnessTag,
             pickupDeadline: this.toLocalInput(l.pickupDeadlineUtc),
-            pickupAddress: l.pickupAddress,
           });
-          this.pickupLocation.set({ lat: l.latitude, lng: l.longitude });
+          this.editAddress.set({ label: l.pickupAddress, latitude: l.latitude, longitude: l.longitude });
         },
         error: (err: Error) =>
           this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not load listing'),
       });
     });
-  }
-
-  protected onLocationPicked(pos: FbLatLng): void {
-    this.pickupLocation.set(pos);
   }
 
   protected onPhoto(event: Event): void {
@@ -243,9 +255,8 @@ export class CreateListing {
   protected submit(): void {
     const v = this.form.getRawValue();
     const quantity = Number.parseInt(v.quantityMeals.trim(), 10);
-    const location = this.pickupLocation();
+    const address = this.activeAddress();
 
-    // Collect per-field errors — shown inline under each input AND summarised in a toast.
     const errors: Record<string, string> = {};
     if (!v.title.trim()) {
       errors['title'] = 'Title is required';
@@ -259,15 +270,14 @@ export class CreateListing {
     if (!v.pickupDeadline) {
       errors['pickupDeadline'] = 'Pickup deadline is required';
     }
-    if (!v.pickupAddress.trim()) {
-      errors['pickupAddress'] = 'Pickup address is required';
-    }
     this.fieldErrors.set(errors);
-    this.locationError.set(location ? '' : 'Pin the pickup location on the map');
 
-    const firstError = Object.values(errors)[0] ?? this.locationError();
-    if (firstError || !location) {
-      this.toast.show('fa-solid fa-triangle-exclamation', firstError || 'Pin the pickup location on the map');
+    const firstError = Object.values(errors)[0];
+    if (firstError || !address) {
+      this.toast.show(
+        'fa-solid fa-triangle-exclamation',
+        firstError || 'Choose a pickup address from the top-bar selector',
+      );
       return;
     }
 
@@ -280,9 +290,9 @@ export class CreateListing {
       freshnessTag: v.freshnessTag,
       preparedAtUtc: null,
       pickupDeadlineUtc: new Date(v.pickupDeadline).toISOString(),
-      pickupAddress: v.pickupAddress.trim(),
-      latitude: location.lat,
-      longitude: location.lng,
+      pickupAddress: address.label,
+      latitude: address.latitude,
+      longitude: address.longitude,
     };
 
     const id = this.editId();

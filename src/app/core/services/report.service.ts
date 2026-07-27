@@ -2,18 +2,31 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_ENDPOINTS } from '@core/config/api-endpoints';
 import { ApiService } from '@core/http/api.service';
-import { DonorReport, RecipientReport } from '@core/models/report.model';
+import {
+  DonorReport,
+  PlatformReport,
+  RecipientReport,
+  VolunteerReport,
+} from '@core/models/report.model';
 
-/** Donor / recipient monthly stats + chart data. */
+/** Chart-ready impact reports (Phase 8/9), role-scoped via the JWT. */
 @Injectable({ providedIn: 'root' })
 export class ReportService {
   private readonly api = inject(ApiService);
 
-  donor(id: string | number): Observable<DonorReport> {
-    return this.api.get<DonorReport>(API_ENDPOINTS.reports.donor(id));
+  donor(): Observable<DonorReport> {
+    return this.api.get<DonorReport>(API_ENDPOINTS.reports.donor);
   }
 
-  recipient(id: string | number): Observable<RecipientReport> {
-    return this.api.get<RecipientReport>(API_ENDPOINTS.reports.recipient(id));
+  volunteer(): Observable<VolunteerReport> {
+    return this.api.get<VolunteerReport>(API_ENDPOINTS.reports.volunteer);
+  }
+
+  recipient(): Observable<RecipientReport> {
+    return this.api.get<RecipientReport>(API_ENDPOINTS.reports.recipient);
+  }
+
+  platform(): Observable<PlatformReport> {
+    return this.api.get<PlatformReport>(API_ENDPOINTS.reports.platform);
   }
 }

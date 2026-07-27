@@ -1,11 +1,19 @@
-export type DisputeStatus = 'open' | 'resolved';
+export type DisputeStatus = 'Open' | 'Resolved';
 
+/** Dispute — GET /api/disputes (`DisputeResponse`). */
 export interface Dispute {
-  id: number | string;
-  listingId: number | string;
-  raisedBy: string;
+  id: string;
+  listingId: string;
+  raisedByUserId: string;
   reason: string;
   status: DisputeStatus;
-  createdAt: string;
-  resolvedAt?: string;
+  resolutionNote: string | null;
+  createdAtUtc: string;
+  resolvedAtUtc: string | null;
+}
+
+/** Request body for POST /api/disputes. */
+export interface RaiseDisputeBody {
+  listingId: string;
+  reason: string;
 }

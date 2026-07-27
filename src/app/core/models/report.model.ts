@@ -1,30 +1,37 @@
-/** A single point in a monthly time-series used by report charts. */
-export interface MonthlyStat {
-  month: string;
-  meals: number;
-  listings?: number;
+/** Chart series point shared by every report — `{ period: "yyyy-MM", value }`. */
+export interface ChartPoint {
+  period: string;
+  value: number;
 }
 
+/** GET /api/reports/donor */
 export interface DonorReport {
-  donorId: number | string;
-  totalMeals: number;
   totalListings: number;
-  certificates: number;
-  chart: MonthlyStat[];
+  totalMealsDonated: number;
+  totalCertificates: number;
+  mealsDonatedByMonth: ChartPoint[];
 }
 
+/** GET /api/reports/volunteer */
+export interface VolunteerReport {
+  totalDeliveries: number;
+  totalPoints: number;
+  deliveriesByMonth: ChartPoint[];
+}
+
+/** GET /api/reports/recipient */
 export interface RecipientReport {
-  recipientId: number | string;
-  totalReceived: number;
-  totalDistributions: number;
-  chart: MonthlyStat[];
+  totalMealsReceived: number;
+  totalDeliveriesReceived: number;
+  mealsReceivedByMonth: ChartPoint[];
 }
 
-export interface AdminReport {
-  totalMeals: number;
+/** GET /api/reports/platform (admin). */
+export interface PlatformReport {
+  totalMealsDonated: number;
   totalListings: number;
   totalDonors: number;
   totalVolunteers: number;
   totalRecipients: number;
-  chart: MonthlyStat[];
+  mealsByMonth: ChartPoint[];
 }

@@ -4,7 +4,9 @@ export type ListingStatus =
   | 'pickedup'
   | 'delivered'
   | 'confirmed'
-  | 'expired';
+  | 'expired'
+  | 'cancelled'
+  | 'rejected';
 
 export interface Listing {
   id: number;
@@ -28,6 +30,20 @@ export const STATUS_LABELS: Record<ListingStatus, string> = {
   delivered: 'Delivered',
   confirmed: 'Confirmed',
   expired: 'Expired',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
+};
+
+/** Font Awesome icon per status — used by the common status badge. */
+export const STATUS_ICONS: Record<ListingStatus, string> = {
+  pending: 'fa-solid fa-clock',
+  claimed: 'fa-solid fa-hand',
+  pickedup: 'fa-solid fa-box',
+  delivered: 'fa-solid fa-truck',
+  confirmed: 'fa-solid fa-circle-check',
+  expired: 'fa-solid fa-hourglass-end',
+  cancelled: 'fa-solid fa-ban',
+  rejected: 'fa-solid fa-circle-xmark',
 };
 
 export interface TimelineStep {
