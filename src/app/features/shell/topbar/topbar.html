@@ -51,11 +51,16 @@
         type="button"
         class="active-toggle"
         [class.is-on]="availability.isActive()"
+        [disabled]="availability.busy()"
         (click)="availability.toggle()"
         title="Toggle your availability"
       >
-        <span class="dot"></span>
-        <span>{{ availability.label() }}</span>
+        @if (availability.busy()) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        } @else {
+          <span class="dot"></span>
+        }
+        <span>{{ availability.busy() ? 'Locating…' : availability.label() }}</span>
       </button>
     }
 

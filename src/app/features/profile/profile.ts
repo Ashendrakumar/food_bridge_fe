@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '@core/services/auth.service';
+import { AvailabilityService } from '@core/services/availability.service';
 import { GeocodingService } from '@core/services/geocoding.service';
 import { PickupAddress, PickupAddressService } from '@core/services/pickup-address.service';
 import { ToastService } from '@core/services/toast.service';
@@ -62,16 +63,24 @@ const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
             <div>
               <div class="font-semibold text-sm">Availability</div>
               <div class="text-muted text-xs">
-                {{ available() ? 'Active — visible for matching' : 'Offline — not receiving new work' }}
+                {{ availability.isActive() ? 'Active — visible for matching' : 'Offline — not receiving new work' }}
               </div>
+              @if (!availability.isActive()) {
+                <div class="text-muted text-xs mt-0.5">
+                  <i class="fa-solid fa-location-crosshairs mr-1"></i>Going active shares your current location.
+                </div>
+              }
             </div>
             <button
               type="button"
-              [class]="(available() ? 'btn-fb' : 'btn-fb-outline') + ' !py-1.5 !px-4 !text-sm'"
-              [disabled]="savingAvailability()"
-              (click)="toggleAvailability()"
+              [class]="(availability.isActive() ? 'btn-fb' : 'btn-fb-outline') + ' !py-1.5 !px-4 !text-sm'"
+              [disabled]="availability.busy()"
+              (click)="availability.toggle()"
             >
-              {{ available() ? 'Active' : 'Offline' }}
+              @if (availability.busy()) {
+                <i class="fa-solid fa-spinner fa-spin mr-1"></i>
+              }
+              {{ availability.isActive() ? 'Active' : 'Offline' }}
             </button>
           </div>
         }
@@ -339,13 +348,12 @@ export class Profile {
   private readonly users = inject(UserService);
   private readonly toast = inject(ToastService);
   protected readonly pickup = inject(PickupAddressService);
+  protected readonly availability = inject(AvailabilityService);
   private readonly geocoding = inject(GeocodingService);
 
   protected readonly profile = signal<UserProfile | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
-  protected readonly savingAvailability = signal(false);
-  protected readonly available = signal(false);
 
   // ---- Pickup address management (donors) ----
   protected readonly isDonor = computed(() => this.profile()?.role?.toLowerCase() === 'donor');
@@ -435,26 +443,6 @@ export class Profile {
       error: (err: Error) => {
         this.loading.set(false);
         this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not load profile');
-      },
-    });
-  }
-
-  protected toggleAvailability(): void {
-    const id = this.profile()?.id;
-    if (!id) {
-      return;
-    }
-    const next = !this.available();
-    this.savingAvailability.set(true);
-    this.users.setAvailability(id, next).subscribe({
-      next: (p) => {
-        this.available.set(p.isAvailable);
-        this.savingAvailability.set(false);
-        this.toast.show('fa-solid fa-circle-check', p.isAvailable ? 'You are now active' : 'You are now offline');
-      },
-      error: (err: Error) => {
-        this.savingAvailability.set(false);
-        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not update availability');
       },
     });
   }
@@ -713,7 +701,7 @@ export class Profile {
 
   private applyProfile(p: UserProfile): void {
     this.profile.set(p);
-    this.available.set(p.isAvailable);
+    this.availability.hydrate(p.isAvailable);
     this.loading.set(false);
     this.auth.patchCurrentUser({ avatarUrl: p.avatarUrl ?? undefined });
     this.form.patchValue(
