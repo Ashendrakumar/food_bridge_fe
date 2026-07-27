@@ -232,7 +232,7 @@ export class Topbar {
   }
 
   protected selectAddr(id: string): void {
-    this.pickup.select(id);
+    this.pickup.select(id).subscribe();
     this.addrOpen.set(false);
   }
 

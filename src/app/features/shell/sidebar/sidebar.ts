@@ -18,7 +18,7 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       width: 260px;
       background: var(--fb-surface);
       border-right: 1px solid var(--fb-line);
-      padding: 22px 16px;
+      padding: 22px 16px 6px;
       position: fixed;
       top: 0;
       left: 0;

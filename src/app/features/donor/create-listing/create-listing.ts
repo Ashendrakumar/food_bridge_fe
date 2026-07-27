@@ -5,7 +5,7 @@ import { APP_ROUTES } from '@core/config/app-routes';
 import { DietType, FreshnessTag, ListingWriteBody, MealType } from '@core/models/listing-api.model';
 import { DonorReport } from '@core/models/report.model';
 import { ListingService } from '@core/services/listing.service';
-import { PickupAddressService } from '@core/services/pickup-address.service';
+import { PickupAddress, PickupAddressService } from '@core/services/pickup-address.service';
 import { ReportService } from '@core/services/report.service';
 import { ToastService } from '@core/services/toast.service';
 import { FbButton } from '@shared/ui/button/button';
@@ -290,9 +290,7 @@ export class CreateListing {
       freshnessTag: v.freshnessTag,
       preparedAtUtc: null,
       pickupDeadlineUtc: new Date(v.pickupDeadline).toISOString(),
-      pickupAddress: address.label,
-      latitude: address.latitude,
-      longitude: address.longitude,
+      ...this.pickupPayload(address),
     };
 
     const id = this.editId();
@@ -315,6 +313,24 @@ export class CreateListing {
         this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not save the listing');
       },
     });
+  }
+
+  /**
+   * Builds the listing's pickup fields per the backend's either/or contract: a saved
+   * address from the caller's own book is sent as `donorAddressId`; anything else
+   * (the edited listing's own stored address, or a local-fallback entry) is sent as the
+   * freeform `pickupAddress`/`latitude`/`longitude` trio.
+   */
+  private pickupPayload(
+    active: PickupAddress | { label: string; latitude: number; longitude: number; },
+  ): Pick<ListingWriteBody, 'donorAddressId' | 'pickupAddress' | 'latitude' | 'longitude'> {
+    const saved = this.pickup.selected();
+    if (!this.editAddress() && this.pickup.serverBacked() && saved) {
+      return { donorAddressId: saved.id };
+    }
+    // Saved addresses carry the full text in `address`; the edited listing's own in `label`.
+    const text = 'address' in active ? active.address : active.label;
+    return { pickupAddress: text, latitude: active.latitude, longitude: active.longitude };
   }
 
   private done(wasEdit: boolean, warning?: string): void {

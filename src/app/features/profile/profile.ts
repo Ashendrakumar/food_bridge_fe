@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '@core/services/auth.service';
 import { GeocodingService } from '@core/services/geocoding.service';
-import { PickupAddressService } from '@core/services/pickup-address.service';
+import { PickupAddress, PickupAddressService } from '@core/services/pickup-address.service';
 import { ToastService } from '@core/services/toast.service';
 import { UserService } from '@core/services/user.service';
 import { UpdateProfileBody, UserProfile } from '@core/models/user.model';
@@ -13,6 +14,9 @@ import { FbLatLng, FbMapConfig } from '@shared/ui/map/fb-map.model';
 import { RoleBadge } from '@shared/ui/role-badge/role-badge';
 import { Avatar } from '@shared/ui/avatar/avatar';
 import { environment } from '@env/environment';
+
+/** Address-form controls that carry validation, in display order. */
+const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
 
 @Component({
   selector: 'app-profile',
@@ -102,24 +106,61 @@ import { environment } from '@env/environment';
             </button>
           </div>
 
+          @if (pickup.loading()) {
+            <div class="text-muted text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading addresses…</div>
+          }
           <div class="space-y-2">
             @for (a of pickup.addresses(); track a.id) {
-              <div class="addr-row" [class.sel]="a.id === pickup.selected()?.id" (click)="pickup.select(a.id)">
-                <i class="fa-solid mr-2" [class]="a.id === pickup.selected()?.id ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
-                <span class="flex-1 text-sm truncate">{{ a.label }}</span>
-                @if (a.id === pickup.selected()?.id) {
-                  <span class="badge-fb bg-primary-soft text-primary-deep mr-2">Default</span>
+              <div class="addr-row" [class.sel]="isDefault(a)">
+                <i class="fa-solid mr-2 shrink-0" [class]="isDefault(a) ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-semibold truncate">{{ a.label }}</div>
+                  <div class="text-xs text-muted truncate">{{ a.address }}</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  class="addr-switch shrink-0"
+                  [class.on]="isDefault(a)"
+                  [attr.aria-checked]="isDefault(a)"
+                  [disabled]="isDefault(a) || settingDefaultId() === a.id"
+                  [title]="isDefault(a) ? 'Default pickup address' : 'Set as default'"
+                  (click)="setDefault(a, $event)"
+                >
+                  <span class="knob"></span>
+                  <span class="addr-switch-text">
+                    @if (settingDefaultId() === a.id) {
+                      <i class="fa-solid fa-spinner fa-spin"></i>&nbsp;Saving…
+                    } @else {
+                      {{ isDefault(a) ? 'Default' : 'Set default' }}
+                    }
+                  </span>
+                </button>
+                @if (confirmRemoveId() === a.id) {
+                  <span class="addr-confirm-text">Remove?</span>
+                  <button type="button" class="addr-x addr-x-danger" title="Confirm remove" [disabled]="removingId() === a.id" (click)="removeAddr(a.id, $event)">
+                    @if (removingId() === a.id) {
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                    } @else {
+                      <i class="fa-solid fa-check"></i>
+                    }
+                  </button>
+                  <button type="button" class="addr-x" title="Keep address" (click)="cancelRemove($event)"><i class="fa-solid fa-xmark"></i></button>
+                } @else {
+                  <button type="button" class="addr-x" title="Edit" (click)="startEdit(a, $event)"><i class="fa-solid fa-pen"></i></button>
+                  <button type="button" class="addr-x" title="Remove" (click)="askRemove(a.id, $event)"><i class="fa-solid fa-trash-can"></i></button>
                 }
-                <button type="button" class="addr-x" title="Remove" (click)="removeAddr(a.id, $event)"><i class="fa-solid fa-xmark"></i></button>
               </div>
             } @empty {
-              <div class="text-muted text-sm">No pickup addresses yet — add one below.</div>
+              @if (!pickup.loading()) {
+                <div class="text-muted text-sm">No pickup addresses yet — add one below.</div>
+              }
             }
           </div>
 
           @if (addOpen()) {
             <div class="mt-4 pt-4 border-t border-line">
-              <label class="small-label mb-2 block">Pin the pickup location</label>
+              <div class="small-label mb-2">{{ editingId() ? 'Edit address' : 'New address' }} — pin the pickup location</div>
               <app-fb-map class="block mb-3" [config]="addMapConfig()" (locationChange)="onAddLocation($event)" />
               <div class="mb-3">
                 <app-button variant="outline" icon="fa-solid fa-location-crosshairs" [block]="true" [loading]="geoBusy()" (clicked)="captureGps()">
@@ -127,14 +168,16 @@ import { environment } from '@env/environment';
                 </app-button>
               </div>
               <form [formGroup]="addrForm" class="grid sm:grid-cols-2 gap-3">
-                <app-input class="sm:col-span-2" label="Address" formControlName="address" placeholder="e.g. C.G. Road, Navrangpura" [required]="true" hint="Drop a pin or use GPS to auto-fill." />
+                <app-input class="sm:col-span-2" label="Label" formControlName="label" placeholder="e.g. Home, Main Branch" [required]="true" [maxlength]="100" hint="A short name to recognise this location." [error]="addrErr('label')" />
+                <app-input class="sm:col-span-2" label="Address" formControlName="address" placeholder="e.g. C.G. Road, Navrangpura" [required]="true" [maxlength]="500" hint="Drop a pin or use GPS to auto-fill." [error]="addrErr('address')" />
                 <app-input label="City" formControlName="city" placeholder="City" />
-                <app-input label="Pincode" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" />
+                <app-input label="Pincode" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" [error]="addrErr('pincode')" />
               </form>
-              <div class="mt-4">
+              <div class="mt-4 flex gap-2">
                 <app-button icon="fa-solid fa-check" [disabled]="savingAddr()" (clicked)="saveAddress()">
-                  {{ savingAddr() ? 'Saving…' : 'Save Address' }}
+                  {{ savingAddr() ? 'Saving…' : editingId() ? 'Update Address' : 'Save Address' }}
                 </app-button>
+                <app-button variant="ghost" (clicked)="toggleAddForm()">Cancel</app-button>
               </div>
             </div>
           }
@@ -195,20 +238,77 @@ import { environment } from '@env/environment';
     .addr-row {
       display: flex;
       align-items: center;
+      gap: 8px;
       padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid var(--fb-line);
-      cursor: pointer;
       transition:
         border-color 0.15s ease,
         background 0.15s ease;
     }
-    .addr-row:hover {
-      border-color: var(--fb-primary);
-    }
     .addr-row.sel {
       border-color: var(--fb-primary);
       background: var(--fb-primary-soft);
+    }
+    /* Default toggle switch */
+    .addr-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--fb-line);
+      background: var(--fb-bg);
+      border-radius: 999px;
+      padding: 3px 12px 3px 3px;
+      cursor: pointer;
+      color: var(--fb-muted);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition:
+        border-color 0.15s ease,
+        color 0.15s ease,
+        background 0.15s ease;
+    }
+    .addr-switch:hover:not(:disabled) {
+      border-color: var(--fb-primary);
+      color: var(--fb-primary-deep);
+    }
+    .addr-switch .knob {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+      border-radius: 999px;
+      background: var(--fb-line);
+      transition: background 0.15s ease;
+    }
+    .addr-switch .knob::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+      transition: transform 0.15s ease;
+    }
+    .addr-switch.on {
+      color: var(--fb-primary-deep);
+      border-color: var(--fb-primary);
+      background: var(--fb-primary-soft);
+      cursor: default;
+    }
+    .addr-switch.on .knob {
+      background: var(--fb-primary);
+    }
+    .addr-switch.on .knob::after {
+      transform: translateX(16px);
+    }
+    .addr-switch:disabled:not(.on) {
+      cursor: default;
+      opacity: 0.7;
     }
     .addr-x {
       border: 0;
@@ -222,6 +322,15 @@ import { environment } from '@env/environment';
     .addr-x:hover {
       color: #e04434;
       background: var(--fb-bg);
+    }
+    .addr-x-danger {
+      color: #e04434;
+    }
+    .addr-confirm-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e04434;
+      white-space: nowrap;
     }
   `,
 })
@@ -244,6 +353,15 @@ export class Profile {
   protected readonly geoBusy = signal(false);
   protected readonly savingAddr = signal(false);
   protected readonly addLocation = signal<FbLatLng | null>(null);
+  protected readonly editingId = signal<string | null>(null);
+  protected readonly removingId = signal<string | null>(null);
+  protected readonly settingDefaultId = signal<string | null>(null);
+  /** Address awaiting delete confirmation (inline two-step confirm). */
+  protected readonly confirmRemoveId = signal<string | null>(null);
+
+  protected isDefault(a: PickupAddress): boolean {
+    return a.id === this.pickup.selected()?.id;
+  }
 
   protected readonly addMapConfig = computed<FbMapConfig>(() => ({
     mode: 'picker',
@@ -255,10 +373,20 @@ export class Profile {
   }));
 
   protected readonly addrForm = new FormGroup({
-    address: new FormControl('', { nonNullable: true }),
+    label: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(100)] }),
+    address: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(500)] }),
     city: new FormControl('', { nonNullable: true }),
-    pincode: new FormControl('', { nonNullable: true }),
+    pincode: new FormControl('', { nonNullable: true, validators: [Validators.pattern(/^\d{0,6}$/)] }),
   });
+
+  /** Per-field validation messages shown beneath each input (mirrors the register form). */
+  protected readonly addrErrors = signal<Record<string, string>>({});
+  /** True once a save has been attempted — enables live re-validation on change. */
+  private addrValidated = false;
+
+  protected addrErr(field: string): string {
+    return this.addrErrors()[field] ?? '';
+  }
 
   /** Icon + colour class for an account status pill. */
   protected statusMeta(status: string): { icon: string; cls: string; } {
@@ -290,6 +418,13 @@ export class Profile {
   });
 
   constructor() {
+    // Re-validate the address fields on every change, once a save has been attempted.
+    this.addrForm.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => {
+      if (this.addrValidated) {
+        this.refreshAddrErrors();
+      }
+    });
+
     const id = this.auth.currentUser()?.id;
     if (!id) {
       this.loading.set(false);
@@ -426,34 +561,154 @@ export class Profile {
     });
   }
 
+  /** Make this address the default (selected) pickup address. */
+  protected setDefault(a: PickupAddress, event: Event): void {
+    event.stopPropagation();
+    if (this.isDefault(a) || this.settingDefaultId()) {
+      return;
+    }
+    this.settingDefaultId.set(a.id);
+    this.pickup.select(a.id).subscribe({
+      next: () => {
+        this.settingDefaultId.set(null);
+        this.toast.show('fa-solid fa-circle-check', `“${a.label}” is now your default pickup address`);
+      },
+      error: (err: Error) => {
+        this.settingDefaultId.set(null);
+        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not set the default address');
+      },
+    });
+  }
+
+  /** Load an existing address into the form for editing. */
+  protected startEdit(a: PickupAddress, event: Event): void {
+    event.stopPropagation();
+    this.editingId.set(a.id);
+    this.addLocation.set({ lat: a.latitude, lng: a.longitude });
+    this.addrForm.reset({ label: a.label, address: a.address, city: '', pincode: '' });
+    this.addrValidated = false;
+    this.addrErrors.set({});
+    this.addOpen.set(true);
+  }
+
   protected saveAddress(): void {
+    this.addrValidated = true;
+    this.addrForm.markAllAsTouched();
+    this.refreshAddrErrors();
+    const firstError = this.firstAddrError();
+    if (firstError) {
+      this.toast.show('fa-solid fa-triangle-exclamation', firstError);
+      return;
+    }
+
     const loc = this.addLocation();
-    const v = this.addrForm.getRawValue();
-    const label = [v.address.trim(), v.city.trim()].filter(Boolean).join(', ');
     if (!loc) {
       this.toast.show('fa-solid fa-triangle-exclamation', 'Drop a pin or use your current location');
       return;
     }
-    if (!label) {
-      this.toast.show('fa-solid fa-triangle-exclamation', 'Enter the address');
-      return;
-    }
+
+    const v = this.addrForm.getRawValue();
+    const label = v.label.trim();
+    const address = [v.address.trim(), v.city.trim(), v.pincode.trim()].filter(Boolean).join(', ');
+
+    const editId = this.editingId();
     this.savingAddr.set(true);
-    this.pickup.addWithCoords(label, loc.lat, loc.lng);
-    this.savingAddr.set(false);
-    this.addOpen.set(false);
-    this.resetAddForm();
-    this.toast.show('fa-solid fa-circle-check', 'Pickup address added');
+    const request$ = editId
+      ? this.pickup.update(editId, label, address, loc.lat, loc.lng, this.isDefaultOf(editId))
+      : this.pickup.create(label, address, loc.lat, loc.lng);
+
+    request$.subscribe({
+      next: () => {
+        this.savingAddr.set(false);
+        this.addOpen.set(false);
+        this.resetAddForm();
+        this.toast.show('fa-solid fa-circle-check', editId ? 'Address updated' : 'Pickup address added');
+      },
+      error: (err: Error) => {
+        this.savingAddr.set(false);
+        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not save the address');
+      },
+    });
+  }
+
+  /** Ask for confirmation before deleting (arms the inline confirm on this row). */
+  protected askRemove(id: string, event: Event): void {
+    event.stopPropagation();
+    this.confirmRemoveId.set(id);
+  }
+
+  /** Dismiss the delete confirmation, keeping the address. */
+  protected cancelRemove(event: Event): void {
+    event.stopPropagation();
+    this.confirmRemoveId.set(null);
   }
 
   protected removeAddr(id: string, event: Event): void {
     event.stopPropagation();
-    this.pickup.remove(id);
+    this.removingId.set(id);
+    this.pickup.remove(id).subscribe({
+      next: () => {
+        this.removingId.set(null);
+        this.confirmRemoveId.set(null);
+        this.toast.show('fa-solid fa-circle-check', 'Address removed');
+      },
+      error: (err: Error) => {
+        this.removingId.set(null);
+        this.confirmRemoveId.set(null);
+        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not remove the address');
+      },
+    });
+  }
+
+  private isDefaultOf(id: string): boolean {
+    return this.pickup.addresses().find((a) => a.id === id)?.isDefault ?? false;
+  }
+
+  /** Message for an invalid address-form control, derived from its Angular error state. */
+  private addrControlError(name: string): string {
+    const control = this.addrForm.get(name);
+    if (!control || control.valid) {
+      return '';
+    }
+    switch (name) {
+      case 'label':
+        return control.hasError('required') ? 'A label is required' : 'Label must be 100 characters or fewer';
+      case 'address':
+        return control.hasError('required') ? 'The address is required' : 'Address must be 500 characters or fewer';
+      case 'pincode':
+        return 'Pincode must be up to 6 digits';
+      default:
+        return 'This field is required';
+    }
+  }
+
+  private refreshAddrErrors(): void {
+    const next: Record<string, string> = {};
+    for (const name of ADDR_FIELDS) {
+      const message = this.addrControlError(name);
+      if (message) {
+        next[name] = message;
+      }
+    }
+    this.addrErrors.set(next);
+  }
+
+  private firstAddrError(): string {
+    for (const name of ADDR_FIELDS) {
+      const message = this.addrControlError(name);
+      if (message) {
+        return message;
+      }
+    }
+    return '';
   }
 
   private resetAddForm(): void {
+    this.editingId.set(null);
     this.addLocation.set(null);
-    this.addrForm.reset({ address: '', city: '', pincode: '' });
+    this.addrValidated = false;
+    this.addrErrors.set({});
+    this.addrForm.reset({ label: '', address: '', city: '', pincode: '' });
   }
 
   private applyProfile(p: UserProfile): void {
