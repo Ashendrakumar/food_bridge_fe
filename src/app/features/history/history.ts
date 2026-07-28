@@ -55,7 +55,7 @@ const MONTHS = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-page-wrapper [title]="title()" [description]="description()" [hasActions]="true">
-      <div pageActions>
+      <ng-container pageActions>
         <app-button
           variant="outline"
           icon="fa-solid fa-file-export"
@@ -72,7 +72,7 @@ const MONTHS = [
         >
           Refresh
         </app-button>
-      </div>
+      </ng-container>
 
       <!-- Lifetime totals, straight from the role's report endpoint -->
       <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
@@ -181,7 +181,7 @@ export class History {
   /** Recipient rows — GET /listings/history (their confirmed receipts). */
   private readonly received = signal<ApiListingSummary[]>([]);
   /** Lifetime totals + monthly series for whichever role is signed in. */
-  private readonly totals = signal<{ a: number; b: number; c: number } | null>(null);
+  private readonly totals = signal<{ a: number; b: number; c: number; } | null>(null);
   private readonly series = signal<ChartPoint[]>([]);
 
   // ---- Copy ----

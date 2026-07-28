@@ -117,9 +117,9 @@ import { NotificationItem } from '@shared/ui/notification-item/notification-item
   styles: `
     .notif-badge {
       position: absolute;
-      top: -2px;
-      right: -2px;
-      background: var(--fb-orange);
+      top: 0px;
+      right: 3px;
+      background: var(--fb-accent);
       color: #fff;
       font-size: 10px;
       font-weight: 700;
