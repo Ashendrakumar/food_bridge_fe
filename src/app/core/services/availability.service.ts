@@ -1,8 +1,11 @@
 import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { switchMap } from 'rxjs';
-import { UpdateProfileBody } from '@core/models/user.model';
+import { AccountStatus, UpdateProfileBody } from '@core/models/user.model';
+import type { DialogRef } from '@shared/ui/dialog/dialog-ref';
+import { LocationPermissionModal } from '@shared/ui/location-permission-modal/location-permission-modal';
 import { FbLatLng } from '@shared/ui/map/fb-map.model';
 import { AuthService } from './auth.service';
+import { DialogService } from './dialog.service';
 import { GeolocationError, GeolocationService } from './geolocation.service';
 import { NotificationService } from './notification.service';
 import { ToastService } from './toast.service';
@@ -22,14 +25,29 @@ export class AvailabilityService {
   private readonly auth = inject(AuthService);
   private readonly users = inject(UserService);
   private readonly geo = inject(GeolocationService);
+  private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly notifications = inject(NotificationService);
 
   readonly isActive = signal(false);
   /** True while locating / syncing / calling the backend. */
   readonly busy = signal(false);
-  /** Raised when the user tries to go active but location permission is blocked. */
-  readonly permissionModalOpen = signal(false);
+
+  /**
+   * The open "turn on location" dialog, or null — also the "is it open?" flag.
+   * Spelled with its body type because `DialogRef` is invariant in that parameter.
+   */
+  private permissionDialog: DialogRef<boolean, LocationPermissionModal> | null = null;
+
+  /**
+   * Verification state, read off the same profile fetch that hydrates the
+   * toggle. The backend's matcher requires `AccountStatus = Verified`
+   * (`RecipientReader.FindNearestAvailableRecipientIdAsync`), so an unverified
+   * account is never matched however available it says it is — pages surface
+   * this rather than showing a bare empty list.
+   */
+  readonly accountStatus = signal<AccountStatus | null>(null);
+  readonly isVerified = computed(() => this.accountStatus() === 'Verified');
 
   private hydrated = false;
 
@@ -52,7 +70,10 @@ export class AvailabilityService {
       if (user?.id && this.appliesToCurrentUser() && !this.hydrated) {
         this.hydrated = true;
         this.users.getProfile(user.id).subscribe({
-          next: (p) => this.isActive.set(p.isAvailable),
+          next: (p) => {
+            this.isActive.set(p.isAvailable);
+            this.accountStatus.set(p.accountStatus);
+          },
           error: () => undefined,
         });
       }
@@ -60,9 +81,12 @@ export class AvailabilityService {
   }
 
   /** Sync the toggle state from a freshly-loaded profile, without side effects. */
-  hydrate(isAvailable: boolean): void {
+  hydrate(isAvailable: boolean, accountStatus?: AccountStatus): void {
     this.hydrated = true;
     this.isActive.set(isAvailable);
+    if (accountStatus) {
+      this.accountStatus.set(accountStatus);
+    }
   }
 
   toggle(): void {
@@ -113,17 +137,50 @@ export class AvailabilityService {
     });
   }
 
+  /**
+   * Guide the user to unblock location. Opening it twice is a no-op — `activate()` can
+   * be pressed again while the dialog is up.
+   */
   private openPermissionModal(): void {
-    this.permissionModalOpen.set(true);
+    if (this.permissionDialog) {
+      return;
+    }
+    const ref = this.dialog.open<unknown, boolean, LocationPermissionModal>({
+      header: {
+        title: 'Turn on location to go active',
+        icon: 'fa-solid fa-location-crosshairs',
+      },
+      content: LocationPermissionModal,
+      size: 'sm',
+      actions: [
+        { id: 'later', label: 'Not now', variant: 'ghost', close: true, result: false },
+        {
+          id: 'retry',
+          label: 'Try again',
+          icon: 'fa-solid fa-rotate-right',
+          close: true,
+          result: true,
+        },
+      ],
+    });
+    this.permissionDialog = ref;
+    ref.closed.subscribe((retry) => {
+      this.permissionDialog = null;
+      if (retry) {
+        this.activate();
+      }
+    });
+
     // Auto-retry the moment the user grants permission from the browser UI.
     this.geo.permissionStatus().then((status) => {
       if (!status) {
         return;
       }
       const onChange = () => {
-        if (status.state === 'granted' && this.permissionModalOpen()) {
+        if (status.state === 'granted' && this.permissionDialog === ref) {
           status.removeEventListener('change', onChange);
-          this.retryFromModal();
+          // Closing with `true` runs the retry through the same path as the button.
+          ref.close(true);
         } else if (status.state !== 'prompt') {
           status.removeEventListener('change', onChange);
         }
@@ -149,16 +206,6 @@ export class AvailabilityService {
         this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not update availability');
       },
     });
-  }
-
-  /** Retry from the permission modal after the user enables location. */
-  retryFromModal(): void {
-    this.permissionModalOpen.set(false);
-    this.activate();
-  }
-
-  closeModal(): void {
-    this.permissionModalOpen.set(false);
   }
 
   private syncThenEnable(id: string, loc: FbLatLng): void {
@@ -212,9 +259,13 @@ export class AvailabilityService {
     this.busy.set(false);
     this.toast.show(icon, message);
     if (isAvailable && this.auth.currentUser()?.role === 'recipient') {
+      // Says only what actually just happened. The previous wording ("new
+      // surplus food is available near you to accept") announced food that
+      // nothing had checked for — it fired on every toggle, so recipients came
+      // to Incoming Food expecting a list and found it empty.
       this.notifications.push(
         'fa-solid fa-box-open',
-        "You're active — new surplus food is available near you to accept",
+        "You're accepting deliveries — we'll match you to the next pickup nearby",
       );
     }
   }

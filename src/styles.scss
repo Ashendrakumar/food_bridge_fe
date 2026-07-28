@@ -5,7 +5,28 @@
 @tailwind utilities;
 
 /* ============================================================
-   Design tokens — sourced from tailwind.config.js via theme().
+   Design tokens.
+
+   Almost everything colour-related is NOT defined here — the
+   plugin in tailwind.config.js emits it once per palette, and
+   ThemeService swaps palettes at runtime by toggling a
+   `theme-<name>` class on <body>. That covers:
+
+     brand      --fb-primary*, --fb-accent*, --fb-orange*
+     effects    --fb-glow-*, --fb-wash-*, --fb-ring
+     surfaces   --fb-bg, --fb-surface, --fb-ink, --fb-muted, --fb-line
+     sidebar    --fb-sidebar*
+
+   Surfaces are in there because they're brand-tinted: the page
+   background is a 97%-lightness wash of the primary hue and the
+   sidebar is the same hue at 13%. They also live in that one rule
+   on purpose: var() is substituted where a property is *declared*,
+   so a token declared here on :root would freeze at the default
+   palette instead of following the class.
+
+   Add colour tokens to `varsFor()` in tailwind.config.js.
+   Only geometry and fixed semantic colours belong below.
+
    Use these var(--fb-*) tokens (or Tailwind color utilities like
    bg-primary / text-muted) everywhere. Never hard-code hex.
    ============================================================ */
@@ -14,35 +35,16 @@
   --fb-shadow: 0 10px 30px rgba(20, 60, 35, 0.08);
   --fb-shadow-lg: 0 20px 50px rgba(20, 60, 35, 0.14);
 
-  /* Brand palette */
-  --fb-primary: theme('colors.primary.DEFAULT');
-  --fb-primary-deep: theme('colors.primary.deep');
-  --fb-primary-bright: theme('colors.primary.bright');
-  --fb-primary-soft: theme('colors.primary.soft');
+  /* Success is a fixed semantic colour, not part of the brand palette. */
   --fb-success: theme('colors.success.DEFAULT');
   --fb-success-deep: theme('colors.success.deep');
   --fb-success-soft: theme('colors.success.soft');
-  --fb-orange: theme('colors.orange.DEFAULT');
-  --fb-orange-soft: theme('colors.orange.soft');
-
-  /* Semantic surfaces — flip automatically in dark mode */
-  --fb-surface: #ffffff;
-  --fb-bg: theme('colors.cream');
-  --fb-ink: theme('colors.ink');
-  --fb-muted: theme('colors.muted');
-  --fb-line: theme('colors.line');
-
-  /* Focus ring */
-  --fb-ring: 0 0 0 3px var(--fb-primary-soft);
-}
-
-body.dark {
-  --fb-surface: theme('colors.surface-dark');
-  --fb-bg: theme('colors.cream-dark');
-  --fb-ink: theme('colors.ink-dark');
-  --fb-muted: theme('colors.muted-dark');
-  --fb-line: theme('colors.line-dark');
-  --fb-primary-soft: rgba(216, 119, 87, 0.16);
+  /* Channels, for alpha washes that must composite over the current surface
+     (e.g. the positive empty-state medallion) rather than being a fixed tint. */
+  --fb-success-rgb: 30 158 92;
+  /* NB: the dark-mode flip for --fb-success-deep lives in darkVarsFor() in
+     tailwind.config.js, not here, so it applies under any `.dark` scope rather
+     than only when the class is on <body>. */
 }
 
 html,
@@ -54,32 +56,41 @@ body {
   @apply font-sans antialiased;
   background: var(--fb-bg);
   color: var(--fb-ink);
+  /* Tells the browser to render native UI — scrollbars, autofill, date and
+     select popups, caret — to match. Without it those stay light-themed and
+     punch white holes in the dark theme. */
+  color-scheme: light;
+}
+body.dark {
+  color-scheme: dark;
+}
+
+/* Set by DialogService while any dialog is open. A native modal <dialog> makes
+   the page inert but still lets it scroll behind the panel; this stops that. */
+body.fb-dialog-open {
+  overflow: hidden;
 }
 
 /* ============================================================
    Reusable FoodBridge component classes
    ============================================================ */
 @layer components {
-  /* ---- Common page scaffolding (used on every in-app view) ---- */
-  .page-title {
-    @apply text-2xl font-bold tracking-tight mb-1;
-  }
-  .page-subtitle {
-    @apply text-muted mb-6;
-  }
+  /* ---- Common page scaffolding ----
+     The page heading block (title + description + header actions) lives in
+     `PageWrapper` (shared/ui/page-wrapper), which every in-app view renders — the
+     old .page-title/.page-subtitle/.page-header utilities were removed with it so
+     there is only one way to build a page header. .section-title stays: it labels
+     regions *inside* a page, which the wrapper knows nothing about. */
   .section-title {
     @apply font-semibold mb-3;
-  }
-  .page-header {
-    @apply flex items-start justify-between gap-3 flex-wrap mb-6;
   }
 
   /* Auth screen wrapper with brand radial-gradient background */
   .fb-auth-wrap {
     @apply min-h-dvh flex items-center justify-center relative p-5;
     background:
-      radial-gradient(circle at 15% 20%, rgba(226, 144, 108, 0.18), transparent 40%),
-      radial-gradient(circle at 85% 80%, rgba(255, 122, 61, 0.16), transparent 40%), var(--fb-bg);
+      radial-gradient(circle at 15% 20%, var(--fb-wash-primary), transparent 40%),
+      radial-gradient(circle at 85% 80%, var(--fb-wash-accent), transparent 40%), var(--fb-bg);
   }
 
   /* Frosted-glass card */
@@ -100,14 +111,14 @@ body {
   .fb-brand-logo {
     @apply w-16 h-16 flex items-center justify-center text-white text-[28px] mx-auto mb-[18px] bg-gradient-primary;
     border-radius: 20px;
-    box-shadow: 0 10px 24px rgba(216, 119, 87, 0.3);
+    box-shadow: 0 10px 24px var(--fb-glow-primary);
   }
 
   /* Buttons */
   .btn-fb {
     @apply inline-flex items-center justify-center text-white rounded-fb-btn font-semibold px-6 py-3 bg-gradient-primary transition-transform duration-150;
     border: 1px solid transparent;
-    box-shadow: 0 8px 20px rgba(182, 92, 63, 0.25);
+    box-shadow: 0 8px 20px var(--fb-glow-primary-deep);
   }
   .btn-fb:hover {
     @apply -translate-y-0.5 text-white;
@@ -122,9 +133,7 @@ body {
     background: var(--fb-primary-soft);
     color: var(--fb-primary-deep);
   }
-  body.dark .btn-fb-outline {
-    color: var(--fb-primary-bright);
-  }
+  /* No body.dark override needed — --fb-primary-deep is itself dark-aware. */
   .btn-ghost {
     @apply inline-flex items-center justify-center bg-transparent border-0 text-muted font-medium;
   }
@@ -232,7 +241,7 @@ body {
   /* Avatar */
   .avatar-circle {
     @apply w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm;
-    background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+    background: linear-gradient(135deg, var(--fb-accent), var(--fb-accent-deep));
   }
 
   /* Stat cards */
@@ -340,8 +349,100 @@ body {
   .fb-demo-hint b {
     color: var(--fb-primary-deep);
   }
-  body.dark .fb-demo-hint b {
-    color: var(--fb-primary-bright);
+
+  /* ============================================================
+     Popover form controls — <app-select> and <app-date-picker>.
+
+     The closed trigger, its floating panel and the hint/error line are
+     identical in both, and deliberately mirror `.fb-field` in <app-input>
+     so all the form controls line up and focus the same way. They live
+     here rather than in either component because two copies of the same
+     CSS drift, and because each component's own style block has to stay
+     inside the 4kB `anyComponentStyle` budget.
+     ============================================================ */
+  .fb-trigger {
+    @apply flex items-center gap-2.5 w-full rounded-xl border px-3.5 py-3 outline-none text-left cursor-pointer;
+    background: var(--fb-bg);
+    color: var(--fb-ink);
+    border-color: var(--fb-line);
+    font: inherit;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .fb-trigger:focus-visible,
+  .fb-trigger.is-open {
+    border-color: var(--fb-primary);
+    box-shadow: var(--fb-ring);
+  }
+  .fb-trigger:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+  .fb-trigger.invalid {
+    border-color: #ef4444;
+  }
+  .fb-trigger.invalid:focus-visible,
+  .fb-trigger.invalid.is-open {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+  }
+
+  .fb-trigger-lead {
+    @apply shrink-0 text-primary;
+  }
+  .fb-trigger-text {
+    @apply flex-1 min-w-0 truncate;
+  }
+  .fb-trigger.is-placeholder .fb-trigger-text {
+    color: var(--fb-muted);
+  }
+  .fb-trigger-chevron {
+    @apply shrink-0 text-[11px];
+    color: var(--fb-muted);
+    transition: transform 0.15s ease;
+  }
+  .fb-trigger.is-open .fb-trigger-chevron {
+    transform: rotate(180deg);
+  }
+  .fb-trigger-clear {
+    @apply inline-flex items-center justify-center shrink-0 w-5 h-5 rounded-full text-[11px] cursor-pointer;
+    color: var(--fb-muted);
+  }
+  .fb-trigger-clear:hover {
+    background: rgb(var(--fb-ink-rgb) / 0.08);
+    color: var(--fb-ink);
+  }
+
+  /* Floating panel. Sizing (width / max-height) stays with each component —
+     the select fills the field's width, the picker sizes to its content. */
+  .fb-popover {
+    @apply absolute left-0 z-[1050] overflow-hidden rounded-2xl border;
+    top: calc(100% + 6px);
+    background: var(--fb-surface);
+    border-color: var(--fb-line);
+    box-shadow: var(--fb-shadow-lg);
+  }
+  /* Flipped above the field when there isn't room below. */
+  .fb-popover.drop-up {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+
+  /* Hint / error line under any field. */
+  .fb-msg {
+    @apply mt-1.5 mx-0.5 text-xs;
+  }
+  .fb-msg.hint {
+    color: var(--fb-muted);
+  }
+  .fb-msg.error {
+    color: #ef4444;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fb-trigger,
+    .fb-trigger-chevron {
+      transition: none;
+    }
   }
 
   /* Inline text link (e.g. "Create account" / "Sign in") */
@@ -352,8 +453,5 @@ body {
   .fb-link:hover {
     @apply underline;
     color: var(--fb-primary);
-  }
-  body.dark .fb-link {
-    color: var(--fb-primary-bright);
   }
 }

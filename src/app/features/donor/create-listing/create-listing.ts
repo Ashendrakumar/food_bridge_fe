@@ -1,7 +1,8 @@
+import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { APP_ROUTES } from '@core/config/app-routes';
+import { APP_ROUTES, AppNavState } from '@core/config/app-routes';
 import { DietType, FreshnessTag, ListingWriteBody, MealType } from '@core/models/listing-api.model';
 import { DonorReport } from '@core/models/report.model';
 import { ListingService } from '@core/services/listing.service';
@@ -9,7 +10,12 @@ import { PickupAddress, PickupAddressService } from '@core/services/pickup-addre
 import { ReportService } from '@core/services/report.service';
 import { ToastService } from '@core/services/toast.service';
 import { FbButton } from '@shared/ui/button/button';
+import { FbDatePicker } from '@shared/ui/date-picker/date-picker';
+import { ImagePicker } from '@shared/ui/image-picker/image-picker';
 import { FbInput, FbSelectOption } from '@shared/ui/input/input';
+import { FbSelect } from '@shared/ui/select/select';
+import { formatLocal } from '@shared/util/date-value';
+import { PageWrapper } from '@shared/ui/page-wrapper/page-wrapper';
 
 interface NearbyReceiver {
   name: string;
@@ -18,124 +24,143 @@ interface NearbyReceiver {
 
 @Component({
   selector: 'app-create-listing',
-  imports: [ReactiveFormsModule, FbInput, FbButton],
+  imports: [ReactiveFormsModule, FbInput, FbSelect, FbDatePicker, FbButton, ImagePicker, PageWrapper],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h3 class="page-title">{{ editId() ? 'Edit' : 'Create' }} Food Listing</h3>
-    <p class="page-subtitle">Tell volunteers exactly what's available and when.</p>
+    <app-page-wrapper
+      [title]="editId() ? 'Edit Donation' : 'New Donation'"
+      description="Tell volunteers exactly what's available and when."
+      [hasActions]="showBack"
+    >
+      <div pageActions>
+        <app-button variant="outline" icon="fa-solid fa-arrow-left" (clicked)="back()">
+          Back
+        </app-button>
+      </div>
 
-    <div class="grid gap-4 xl:grid-cols-3">
-      <form [formGroup]="form" class="card-fb p-5 xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <!-- Pickup address (chosen from the top bar) -->
-        <div class="col-span-2">
-          <label class="small-label mb-2 block">Pickup Address <span class="text-red-500">*</span></label>
-          @if (activeAddress(); as a) {
-            <div class="addr-banner">
-              <i class="fa-solid fa-location-dot text-primary"></i>
-              <span class="flex-1 text-sm font-medium truncate">{{ a.label }}</span>
-              <span class="text-muted text-xs hidden sm:inline">Change in the top bar ↑</span>
-            </div>
-          } @else {
-            <div class="addr-banner is-empty">
-              <i class="fa-solid fa-triangle-exclamation text-orange"></i>
-              <span class="flex-1 text-sm">Choose a pickup address from the top-bar selector ↑</span>
-            </div>
-          }
-        </div>
-
-        <div class="col-span-2">
-          <app-input label="Title" formControlName="title" placeholder="e.g. Surplus Wedding Catering" [required]="true" hint="A short summary volunteers see first." [error]="err('title')" />
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <app-input label="Food Type" formControlName="foodType" placeholder="e.g. Mixed Veg Meals" [required]="true" hint="e.g. mixed veg meals, sandwiches, rice & curry." [error]="err('foodType')" />
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <label class="small-label mb-2 block">Diet</label>
-          <div class="flex gap-2">
-            <button type="button" class="btn-fb-outline flex-1 !px-2" [class.selected]="form.controls.dietType.value === 'Veg'" (click)="form.controls.dietType.setValue('Veg')">🥦 Veg</button>
-            <button type="button" class="btn-fb-outline flex-1 !px-2" [class.selected]="form.controls.dietType.value === 'NonVeg'" (click)="form.controls.dietType.setValue('NonVeg')">🍗 Non-Veg</button>
-          </div>
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <app-input type="select" label="Meal Type" [options]="mealOptions" formControlName="mealType" />
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <app-input type="number" label="Quantity (meals)" formControlName="quantityMeals" placeholder="e.g. 50" [required]="true" hint="Approximate number of meals available." [error]="err('quantityMeals')" />
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <app-input type="select" label="Freshness" [options]="freshnessOptions" formControlName="freshnessTag" [required]="true" hint="How recently the food was prepared or packed." />
-        </div>
-        <div class="col-span-2 sm:col-span-1">
-          <app-input type="datetime-local" label="Pickup Deadline" formControlName="pickupDeadline" [required]="true" hint="Latest time a volunteer can collect it." [error]="err('pickupDeadline')" />
-        </div>
-        <div class="col-span-2">
-          <div class="map-placeholder !h-28 cursor-pointer" (click)="photoInput.click()">
-            <i class="fa-solid fa-cloud-arrow-up text-2xl mb-1"></i>
-            <div class="text-sm">{{ photoName() || 'Click to upload a photo of the food' }}</div>
-          </div>
-          <input #photoInput type="file" accept="image/jpeg,image/png" hidden (change)="onPhoto($event)" />
-        </div>
-        <div class="col-span-2">
-          <app-button type="button" icon="fa-solid fa-paper-plane" [block]="true" [loading]="submitting()" (clicked)="submit()">
-            {{ editId() ? 'Update' : 'Submit' }} Listing
-          </app-button>
-        </div>
-      </form>
-
-      <div class="flex flex-col gap-4">
-        <!-- Your impact so far -->
-        <div class="card-fb p-5">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-success),var(--fb-success-deep))"><i class="fa-solid fa-seedling"></i></div>
-            <div>
-              <div class="font-bold">Your impact so far</div>
-              <div class="text-muted text-xs">Every listing counts</div>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div><div class="impact-num">{{ impact()?.totalMealsDonated ?? 0 }}</div><div class="text-muted text-[11px]">Meals saved</div></div>
-            <div><div class="impact-num">{{ impact()?.totalCertificates ?? 0 }}</div><div class="text-muted text-[11px]">Donations</div></div>
-            <div><div class="impact-num">{{ co2() }}kg</div><div class="text-muted text-[11px]">CO₂ saved</div></div>
-          </div>
-        </div>
-
-        <!-- Tips -->
-        <div class="card-fb p-5">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-orange),#e8621f)"><i class="fa-solid fa-lightbulb"></i></div>
-            <div class="font-bold">Tips for a great listing</div>
-          </div>
-          <ul class="text-sm space-y-2 m-0 p-0 list-none">
-            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Add a clear photo so volunteers know what to expect.</span></li>
-            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Give an accurate meal count and a realistic pickup deadline.</span></li>
-            <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>List fresh food early for faster pickups.</span></li>
-          </ul>
-        </div>
-
-        <!-- Waiting nearby -->
-        <div class="card-fb p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-3">
-              <div class="stat-icon !mb-0" style="background:var(--fb-primary)"><i class="fa-solid fa-hand-holding-heart"></i></div>
-              <div class="font-bold">Waiting nearby</div>
-            </div>
-            <span class="badge-fb bg-primary-soft text-primary-deep">{{ nearby.length }} Active</span>
-          </div>
-          <div class="space-y-2.5">
-            @for (r of nearby; track r.name) {
-              <div class="flex items-center gap-3">
-                <div class="avatar-circle !w-8 !h-8 !text-xs">{{ r.name.charAt(0) }}</div>
-                <div class="flex-1 min-w-0">
-                  <div class="text-sm font-semibold truncate">{{ r.name }}</div>
-                  <div class="text-muted text-xs">{{ r.dist }} km away</div>
-                </div>
-                <i class="fa-solid fa-location-dot text-muted text-xs"></i>
+      <div class="grid gap-4 xl:grid-cols-3">
+        <form [formGroup]="form" class="card-fb p-5 xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Pickup address (chosen from the top bar) -->
+          <div class="col-span-2">
+            <label class="small-label mb-2 block">Pickup Address <span class="text-red-500">*</span></label>
+            @if (activeAddress(); as a) {
+              <div class="addr-banner">
+                <i class="fa-solid fa-location-dot text-primary"></i>
+                <span class="flex-1 text-sm font-medium truncate">{{ a.label }}</span>
+                <span class="text-muted text-xs hidden sm:inline">Change in the top bar ↑</span>
+              </div>
+            } @else {
+              <div class="addr-banner is-empty">
+                <i class="fa-solid fa-triangle-exclamation text-orange"></i>
+                <span class="flex-1 text-sm">Choose a pickup address from the top-bar selector ↑</span>
               </div>
             }
           </div>
+
+          <div class="col-span-2">
+            <app-input label="Title" formControlName="title" placeholder="e.g. Surplus Wedding Catering" [required]="true" hint="A short summary volunteers see first." [error]="err('title')" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <app-input label="Food Type" formControlName="foodType" placeholder="e.g. Mixed Veg Meals" [required]="true" hint="e.g. mixed veg meals, sandwiches, rice & curry." [error]="err('foodType')" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <label class="small-label mb-2 block">Diet</label>
+            <div class="flex gap-2">
+              <button type="button" class="btn-fb-outline flex-1 !px-2" [class.selected]="form.controls.dietType.value === 'Veg'" (click)="form.controls.dietType.setValue('Veg')">🥦 Veg</button>
+              <button type="button" class="btn-fb-outline flex-1 !px-2" [class.selected]="form.controls.dietType.value === 'NonVeg'" (click)="form.controls.dietType.setValue('NonVeg')">🍗 Non-Veg</button>
+            </div>
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <app-select label="Meal Type" [options]="mealOptions" formControlName="mealType" [searchable]="false" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <app-input type="number" label="Quantity (meals)" formControlName="quantityMeals" placeholder="e.g. 50" [required]="true" hint="Approximate number of meals available." [error]="err('quantityMeals')" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <app-select label="Freshness" [options]="freshnessOptions" formControlName="freshnessTag" [required]="true" [searchable]="false" hint="How recently the food was prepared or packed." />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <app-date-picker
+              mode="datetime"
+              label="Pickup Deadline"
+              formControlName="pickupDeadline"
+              [required]="true"
+              [min]="minDeadline"
+              [minuteStep]="15"
+              hint="Latest time a volunteer can collect it."
+              [error]="err('pickupDeadline')"
+            />
+          </div>
+          <div class="col-span-2">
+            <app-image-picker
+              label="Photo of the food"
+              hint="Optional, but listings with a photo get claimed faster."
+              placeholder="Click to upload, or drop a photo here"
+              (fileChange)="onPhotoPicked($event)"
+            />
+          </div>
+          <div class="col-span-2">
+            <app-button type="button" icon="fa-solid fa-paper-plane" [block]="true" [loading]="submitting()" (clicked)="submit()">
+              {{ editId() ? 'Update' : 'Post' }} Donation
+            </app-button>
+          </div>
+        </form>
+
+        <div class="flex flex-col gap-4">
+          <!-- Your impact so far -->
+          <div class="card-fb p-5">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-success),var(--fb-success-deep))"><i class="fa-solid fa-seedling"></i></div>
+              <div>
+                <div class="font-bold">Your impact so far</div>
+                <div class="text-muted text-xs">Every listing counts</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div><div class="impact-num">{{ impact()?.totalMealsDonated ?? 0 }}</div><div class="text-muted text-[11px]">Meals saved</div></div>
+              <div><div class="impact-num">{{ impact()?.totalCertificates ?? 0 }}</div><div class="text-muted text-[11px]">Donations</div></div>
+              <div><div class="impact-num">{{ co2() }}kg</div><div class="text-muted text-[11px]">CO₂ saved</div></div>
+            </div>
+          </div>
+
+          <!-- Tips -->
+          <div class="card-fb p-5">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="stat-icon !mb-0" style="background:linear-gradient(135deg,var(--fb-accent),var(--fb-accent-deep))"><i class="fa-solid fa-lightbulb"></i></div>
+              <div class="font-bold">Tips for a great listing</div>
+            </div>
+            <ul class="text-sm space-y-2 m-0 p-0 list-none">
+              <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Add a clear photo so volunteers know what to expect.</span></li>
+              <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>Give an accurate meal count and a realistic pickup deadline.</span></li>
+              <li class="flex gap-2"><i class="fa-solid fa-circle-check mt-1 text-success"></i><span>List fresh food early for faster pickups.</span></li>
+            </ul>
+          </div>
+
+          <!-- Waiting nearby -->
+          <div class="card-fb p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="stat-icon !mb-0" style="background:var(--fb-primary)"><i class="fa-solid fa-hand-holding-heart"></i></div>
+                <div class="font-bold">Waiting nearby</div>
+              </div>
+              <span class="badge-fb bg-primary-soft text-primary-deep">{{ nearby.length }} Active</span>
+            </div>
+            <div class="space-y-2.5">
+              @for (r of nearby; track r.name) {
+                <div class="flex items-center gap-3">
+                  <div class="avatar-circle !w-8 !h-8 !text-xs">{{ r.name.charAt(0) }}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold truncate">{{ r.name }}</div>
+                    <div class="text-muted text-xs">{{ r.dist }} km away</div>
+                  </div>
+                  <i class="fa-solid fa-location-dot text-muted text-xs"></i>
+                </div>
+              }
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </app-page-wrapper>
   `,
   styles: `
     .addr-banner {
@@ -165,6 +190,20 @@ export class CreateListing {
   protected readonly pickup = inject(PickupAddressService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
+
+  /**
+   * Back is shown only when the listings page sent us here, which it signals
+   * with `state: { from: 'listings' }`. Opening this form from the sidebar item
+   * or a deep link carries no such state, and Back would then navigate to a
+   * page the user had never visited.
+   *
+   * Read from `Location.getState()` rather than `Router.getCurrentNavigation()`
+   * so a reload of this URL keeps the button — the router persists the state
+   * into `history.state`, which survives refresh.
+   */
+  protected readonly showBack =
+    (this.location.getState() as AppNavState | null)?.from === 'listings';
 
   /** Bound from the `?edit=<id>` query param (withComponentInputBinding). */
   readonly edit = input<string>();
@@ -172,17 +211,25 @@ export class CreateListing {
   protected readonly submitting = signal(false);
 
   protected readonly mealOptions: FbSelectOption[] = [
-    { value: 'Breakfast', label: 'Breakfast' },
-    { value: 'Lunch', label: 'Lunch' },
-    { value: 'Dinner', label: 'Dinner' },
-    { value: 'Snacks', label: 'Snacks' },
+    { value: 'Breakfast', label: 'Breakfast', icon: 'fa-solid fa-mug-saucer' },
+    { value: 'Lunch', label: 'Lunch', icon: 'fa-solid fa-bowl-food' },
+    { value: 'Dinner', label: 'Dinner', icon: 'fa-solid fa-utensils' },
+    { value: 'Snacks', label: 'Snacks', icon: 'fa-solid fa-cookie-bite' },
   ];
 
   protected readonly freshnessOptions: FbSelectOption[] = [
-    { value: 'JustCooked', label: 'Just Cooked' },
-    { value: 'FewHoursOld', label: 'A Few Hours Old' },
-    { value: 'Packaged', label: 'Packaged' },
+    { value: 'JustCooked', label: 'Just Cooked', icon: 'fa-solid fa-fire-burner' },
+    { value: 'FewHoursOld', label: 'A Few Hours Old', icon: 'fa-regular fa-clock' },
+    { value: 'Packaged', label: 'Packaged', icon: 'fa-solid fa-box' },
   ];
+
+  /**
+   * A deadline in the past can never be collected, so the picker won't offer
+   * one. Fixed at page load rather than ticking — a form left open for a while
+   * being a few minutes permissive is harmless, a `min` that moves under the
+   * user's cursor is not.
+   */
+  protected readonly minDeadline = formatLocal(new Date(), 'datetime');
 
   protected readonly nearby: NearbyReceiver[] = [
     { name: 'Hope Community Kitchen', dist: 1.2 },
@@ -191,7 +238,6 @@ export class CreateListing {
   ];
 
   private photoFile: File | null = null;
-  protected readonly photoName = signal('');
   protected readonly impact = signal<DonorReport | null>(null);
   protected readonly co2 = computed(() => Math.round((this.impact()?.totalMealsDonated ?? 0) * 0.45));
 
@@ -246,10 +292,17 @@ export class CreateListing {
     });
   }
 
-  protected onPhoto(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.photoFile = input.files?.[0] ?? null;
-    this.photoName.set(this.photoFile ? this.photoFile.name : '');
+  /** Leave the form without saving and return to the donations list. */
+  protected back(): void {
+    this.router.navigate([APP_ROUTES.appView('listings')]);
+  }
+
+  /**
+   * Held until submit, then uploaded once the listing has an id — the image
+   * endpoint is keyed on the listing, so it cannot be sent with the form.
+   */
+  protected onPhotoPicked(file: File | null): void {
+    this.photoFile = file;
   }
 
   protected submit(): void {
@@ -338,15 +391,13 @@ export class CreateListing {
     if (warning) {
       this.toast.show('fa-solid fa-triangle-exclamation', warning);
     } else {
-      this.toast.show('fa-solid fa-circle-check', wasEdit ? 'Listing updated' : 'Listing posted — nearby volunteers notified!');
+      this.toast.show('fa-solid fa-circle-check', wasEdit ? 'Donation updated' : 'Donation posted — nearby volunteers notified!');
     }
     this.router.navigate([APP_ROUTES.appView('listings')]);
   }
 
-  /** ISO UTC → value for a `datetime-local` input (local time, no seconds). */
+  /** ISO UTC → the picker's local `YYYY-MM-DDTHH:mm` control value. */
   private toLocalInput(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return formatLocal(new Date(iso), 'datetime');
   }
 }

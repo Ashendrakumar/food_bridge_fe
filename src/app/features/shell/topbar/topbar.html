@@ -21,15 +21,28 @@
       <div class="relative">
         <button type="button" class="addr-btn" (click)="toggleAddr()" title="Pickup address">
           <i class="fa-solid fa-location-dot text-primary"></i>
-          <span class="truncate max-w-[120px] sm:max-w-[180px]">{{ pickup.selected()?.label || 'Set pickup address' }}</span>
+          <span class="truncate max-w-[120px] sm:max-w-[180px]">{{
+            pickup.selected()?.label || 'Set pickup address'
+          }}</span>
           <i class="fa-solid fa-chevron-down text-[10px] text-muted"></i>
         </button>
         @if (addrOpen()) {
           <div class="dropdown-panel left-0 w-[300px]">
             <div class="px-2 py-1 small-label">Pickup address</div>
             @for (a of pickup.addresses(); track a.id) {
-              <div class="addr-item" [class.sel]="a.id === pickup.selected()?.id" (click)="selectAddr(a.id)">
-                <i class="fa-solid mr-2" [class]="a.id === pickup.selected()?.id ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
+              <div
+                class="addr-item"
+                [class.sel]="a.id === pickup.selected()?.id"
+                (click)="selectAddr(a.id)"
+              >
+                <i
+                  class="fa-solid mr-2"
+                  [class]="
+                    a.id === pickup.selected()?.id
+                      ? 'fa-circle-check text-primary'
+                      : 'fa-location-dot text-muted'
+                  "
+                ></i>
                 <span class="flex-1 text-sm truncate">{{ a.label }}</span>
               </div>
             } @empty {
@@ -47,57 +60,11 @@
 
   <div class="flex items-center gap-4">
     @if (availability.appliesToCurrentUser()) {
-      <button
-        type="button"
-        class="active-toggle"
-        [class.is-on]="availability.isActive()"
-        [disabled]="availability.busy()"
-        (click)="availability.toggle()"
-        title="Toggle your availability"
-      >
-        @if (availability.busy()) {
-          <i class="fa-solid fa-spinner fa-spin"></i>
-        } @else {
-          <span class="dot"></span>
-        }
-        <span>{{ availability.busy() ? 'Locating…' : availability.label() }}</span>
-      </button>
+      <app-availability-toggle />
     }
 
-    <div class="relative">
-      <button type="button" class="btn-icon" (click)="theme.toggle()">
-        <i [class]="theme.darkMode() ? 'fa-solid fa-sun' : 'fa-solid fa-circle-half-stroke'"></i>
-      </button>
-    </div>
-
     <!-- Notifications -->
-    <div class="relative">
-      <button type="button" class="btn-icon" (click)="toggleNotif()">
-        <i class="fa-solid fa-bell"></i>
-        @if (notifications.count()) {
-          <span class="notif-badge">{{ notifications.count() }}</span>
-        }
-      </button>
-      @if (notifOpen()) {
-        <div class="dropdown-panel w-[320px]">
-          <div class="px-2 py-1 font-semibold text-sm">Notifications</div>
-          @for (n of notifications.notifications(); track n.id) {
-            <div class="notif-item cursor-pointer" [class.opacity-60]="n.isRead" (click)="notifications.markRead(n.id)">
-              <span class="notif-dot" [style.visibility]="n.isRead ? 'hidden' : 'visible'"></span>
-              <div class="min-w-0">
-                <div class="text-[13px] font-medium">{{ n.title }}</div>
-                @if (n.body) {
-                  <div class="text-muted text-[12px]">{{ n.body }}</div>
-                }
-                <div class="text-muted text-[11px]">{{ n.createdAtUtc | date: 'MMM d, h:mm a' }}</div>
-              </div>
-            </div>
-          } @empty {
-            <div class="text-muted text-center py-3 text-[13px]">No notifications</div>
-          }
-        </div>
-      }
-    </div>
+    <app-notification-bell [open]="notifOpen()" (openChange)="onNotifOpenChange($event)" />
 
     <!-- Profile -->
     <div class="relative">

@@ -25,6 +25,19 @@ export interface FbMapLegendItem {
   text: string;
 }
 
+/** One origin→destination hop of a resolved route (i.e. between two stops). */
+export interface FbRouteLeg {
+  distanceText: string;
+  durationText: string;
+  distanceMeters: number;
+  durationSeconds: number;
+}
+
+/** Totals + per-leg breakdown of a resolved `route`-mode request. */
+export interface FbRouteSummary extends FbRouteLeg {
+  legs: FbRouteLeg[];
+}
+
 /**
  * A single object drives every map instance. Only `mode` is really needed;
  * everything else has sensible defaults, so callers configure just what they
@@ -47,6 +60,10 @@ export interface FbMapConfig {
     waypoints?: FbLatLng[];
   };
   travelMode?: FbTravelMode;
+  /** `route` mode — hide the renderer's own A/B/C pins so custom `markers` show through. */
+  suppressRouteMarkers?: boolean;
+  /** `route` mode — polyline colour (defaults to the brand primary). */
+  routeColor?: string;
 
   /** `picker` mode — starting marker; omit to start at `center`. */
   initialLocation?: FbLatLng;

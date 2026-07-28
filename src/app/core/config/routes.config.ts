@@ -27,14 +27,14 @@ export const APP_VIEWS: readonly AppView[] = [
   // ---- Donor ----
   {
     id: 'create',
-    title: 'Create Listing',
+    title: 'New Donation',
     icon: 'fa-solid fa-circle-plus',
     roles: ['donor'],
     load: () => import('@features/donor/create-listing/create-listing').then((m) => m.CreateListing),
   },
   {
     id: 'listings',
-    title: 'My Listings',
+    title: 'My Donations',
     icon: 'fa-solid fa-list-check',
     roles: ['donor'],
     load: () => import('@features/donor/my-listings/my-listings').then((m) => m.MyListings),
@@ -127,7 +127,14 @@ export const APP_VIEWS: readonly AppView[] = [
     roles: ['admin'],
     load: () => import('@features/admin/reports/admin-reports').then((m) => m.AdminReports),
   },
-  // ---- Shared: profile + settings ----
+  // ---- Shared: notifications + profile + settings ----
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    icon: 'fa-solid fa-bell',
+    roles: ALL,
+    load: () => import('@features/notifications/notifications').then((m) => m.Notifications),
+  },
   {
     id: 'profile',
     title: 'Profile',

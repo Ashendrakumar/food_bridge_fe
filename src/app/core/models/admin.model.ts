@@ -1,3 +1,9 @@
+/** A `{ status, count }` breakdown bucket — `StatusCountResponse`. */
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
 /** GET /api/admin/dashboard. */
 export interface AdminDashboard {
   totalDonors: number;
@@ -13,6 +19,10 @@ export interface AdminDashboard {
   totalVolunteerPointsAwarded: number;
   openDisputes: number;
   resolvedDisputes: number;
+  /** Per-status listing counts, chart-ready. */
+  listingsByStatus: StatusCount[];
+  /** Per-status account counts, chart-ready. */
+  accountsByStatus: StatusCount[];
 }
 
 /** GET /api/admin/accounts row. */

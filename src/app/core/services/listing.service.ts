@@ -7,13 +7,21 @@ import {
   ApiListingStatus,
   ApiListingSummary,
   ApiNearbyListing,
+  DietType,
   ListingWriteBody,
+  MealType,
 } from '@core/models/listing-api.model';
 
 /** Result of POST /listings/{id}/images. */
 export interface ImageUploadResult {
   imageId: string;
   imageUrl: string;
+}
+
+/** Optional server-side narrowing for GET /listings/nearby. */
+export interface NearbyFilters {
+  dietType?: DietType;
+  mealType?: MealType;
 }
 
 /**
@@ -57,20 +65,46 @@ export class ListingService {
 
   // ---- Volunteer ----
 
-  /** Pending listings within `radiusKm`, ordered by ascending distance. */
+  /**
+   * Pending listings within `radiusKm`, ordered by ascending distance, optionally
+   * narrowed to a single diet and/or meal type (both filters are server-side).
+   */
   nearby(
     latitude: number,
     longitude: number,
     radiusKm = 10,
     page = 1,
     pageSize = 12,
+    filters?: NearbyFilters,
   ): Observable<ApiNearbyListing[]> {
-    const params: QueryParams = { latitude, longitude, radiusKm, page, pageSize };
+    const params: QueryParams = {
+      latitude,
+      longitude,
+      radiusKm,
+      page,
+      pageSize,
+      dietType: filters?.dietType,
+      mealType: filters?.mealType,
+    };
     return this.api.get<ApiNearbyListing[]>(API_ENDPOINTS.listings.nearby, params);
   }
 
-  claim(id: string): Observable<ApiListing> {
-    return this.api.post<ApiListing>(API_ENDPOINTS.listings.claim(id));
+  /**
+   * Claims a Pending listing. Pass `estimatedPickupAtUtc` (ISO) to commit to a delayed pickup
+   * instead of an implied immediate one; omit it for the old immediate-pickup behaviour. The
+   * backend 422s if the ETA is in the past or later than the listing's own pickup deadline.
+   */
+  claim(id: string, estimatedPickupAtUtc?: string): Observable<ApiListing> {
+    const params = estimatedPickupAtUtc ? { estimatedPickupAtUtc } : undefined;
+    return this.api.post<ApiListing>(API_ENDPOINTS.listings.claim(id), undefined, params);
+  }
+
+  /**
+   * Releases a claim (Claimed → Pending) so another volunteer can take it. Assigned
+   * volunteer only, and only while still Claimed — the backend 422s once pickup is confirmed.
+   */
+  unclaim(id: string): Observable<ApiListing> {
+    return this.api.post<ApiListing>(API_ENDPOINTS.listings.unclaim(id));
   }
 
   confirmPickup(id: string, photo: File): Observable<ApiListing> {

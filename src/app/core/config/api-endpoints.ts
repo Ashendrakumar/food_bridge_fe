@@ -46,6 +46,9 @@ export const API_ENDPOINTS = {
     confirmPickup: (id: Id) => `listings/${id}/confirm-pickup`,
     confirmDelivery: (id: Id) => `listings/${id}/confirm-delivery`,
     // Recipient
+    availableNearby: 'listings/available-nearby',
+    /** POST reserves an uncollected donation; DELETE releases it. */
+    request: (id: Id) => `listings/${id}/request`,
     incoming: 'listings/incoming',
     accept: (id: Id) => `listings/${id}/accept`,
     reject: (id: Id) => `listings/${id}/reject`,
@@ -53,6 +56,20 @@ export const API_ENDPOINTS = {
     history: 'listings/history',
     // Tracking (REST fallback for TrackingHub)
     track: (id: Id) => `listings/${id}/track`,
+  },
+
+  // Consolidated per-role dashboard (chart-ready). lat/lng optional on donor/volunteer.
+  dashboard: {
+    donor: 'dashboard/donor',
+    volunteer: 'dashboard/volunteer',
+    recipient: 'dashboard/recipient',
+  },
+
+  // Admin-managed fallback drop-off locations (surfaces via suggestedDropOffLocation)
+  dropoffLocations: {
+    base: 'dropoff-locations',
+    activate: (id: Id) => `dropoff-locations/${id}/activate`,
+    deactivate: (id: Id) => `dropoff-locations/${id}/deactivate`,
   },
 
   // 7. Notifications (REST fallback for NotificationsHub) + geocode

@@ -17,10 +17,14 @@
     <app-pill type="freshness" [value]="listing().freshnessTag" />
   </div>
 
+  @if (hasMeta()) {
+    <div class="lc-meta"><ng-content select="[cardMeta]" /></div>
+  }
+
   @if (deadline()) {
     <app-deadline-meter
       [deadline]="listing().pickupDeadlineUtc"
-      [createdAt]="listing().createdAtUtc"
+      [createdAt]="listing().createdAtUtc ?? null"
     />
   }
 </div>

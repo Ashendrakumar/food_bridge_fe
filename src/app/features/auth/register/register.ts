@@ -229,6 +229,7 @@ export class Register {
    * failure; the explicit button press surfaces success/failure toasts.
    */
   protected captureGps(auto = false): void {
+    debugger;
     if (!navigator.geolocation) {
       if (!auto) {
         this.toast.warning('Geolocation is not supported on this device.');
@@ -237,6 +238,7 @@ export class Register {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        debugger;
         const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
         this.location.set(loc);
         this.locationError.set('');

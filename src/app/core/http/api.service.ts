@@ -19,8 +19,8 @@ export class ApiService {
     return this.http.get<T>(this.url(path), { params: this.toParams(params) });
   }
 
-  post<T>(path: string, body?: unknown): Observable<T> {
-    return this.http.post<T>(this.url(path), body ?? {});
+  post<T>(path: string, body?: unknown, params?: QueryParams): Observable<T> {
+    return this.http.post<T>(this.url(path), body ?? {}, { params: this.toParams(params) });
   }
 
   put<T>(path: string, body?: unknown): Observable<T> {

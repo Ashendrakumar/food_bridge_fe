@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import { API_ENDPOINTS } from '@core/config/api-endpoints';
 import { ApiService, QueryParams } from '@core/http/api.service';
 import { Notification } from '@core/models/notification.model';
@@ -21,5 +21,15 @@ export class NotificationApiService {
   /** Mark a single notification read (idempotent). */
   markRead(id: string): Observable<Notification> {
     return this.api.patch<Notification>(API_ENDPOINTS.notifications.read(id));
+  }
+
+  /**
+   * Mark several notifications read. The backend has no bulk endpoint yet, so
+   * this fans out one idempotent PATCH per id; swap for a single call if one
+   * lands. Emits an empty array (rather than never emitting, as bare `forkJoin`
+   * would) when there is nothing to mark.
+   */
+  markManyRead(ids: readonly string[]): Observable<Notification[]> {
+    return ids.length ? forkJoin(ids.map((id) => this.markRead(id))) : of([]);
   }
 }

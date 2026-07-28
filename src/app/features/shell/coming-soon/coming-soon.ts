@@ -16,8 +16,8 @@ export class ComingSoon {
   readonly view = input('');
 
   private readonly labels: Record<string, string> = {
-    create: 'Create Listing',
-    listings: 'My Listings',
+    create: 'New Donation',
+    listings: 'My Donations',
     certificates: 'Certificates',
     nearby: 'Nearby Listings',
     deliveries: 'My Deliveries',

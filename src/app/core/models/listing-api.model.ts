@@ -36,6 +36,18 @@ export interface ApiListingTimelineEntry {
   createdAtUtc: string;
 }
 
+/** A fallback drop-off point — `DropOffLocationResponse`. Populated on `suggestedDropOffLocation`. */
+export interface DropOffLocation {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  city: string | null;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 /** Full detail — GET /listings/{id}, POST /claim, /confirm-pickup, /confirm-delivery, /cancel. */
 export interface ApiListing {
   id: string;
@@ -54,6 +66,8 @@ export interface ApiListing {
   status: ApiListingStatus;
   volunteerId: string | null;
   recipientId: string | null;
+  /** Volunteer's committed pickup ETA — non-null only if given on claim; cleared on unclaim. */
+  estimatedPickupAtUtc?: string | null;
   // Contact info (Phase 11) — gated to the listing's own parties, else null.
   donorName?: string | null;
   donorMobile?: string | null;
@@ -65,6 +79,11 @@ export interface ApiListing {
   updatedAtUtc: string;
   images: ApiListingImage[];
   timeline: ApiListingTimelineEntry[];
+  /**
+   * Where to physically take the food when no recipient could be matched. Only ever
+   * populated in the confirm-pickup response itself — null everywhere else.
+   */
+  suggestedDropOffLocation?: DropOffLocation | null;
 }
 
 /** Result of POST /listings/{id}/confirm-receipt. */
@@ -102,6 +121,19 @@ export interface ApiNearbyListing {
   latitude: number;
   longitude: number;
   distanceKm: number;
+}
+
+/**
+ * One row of a recipient's "available near me" feed
+ * (`GET /listings/available-nearby` → `ListingAvailableNearbyResponse`).
+ *
+ * Same shape as {@link ApiNearbyListing} plus the two fields the request action
+ * needs: `status` (`Pending` = nobody has collected it, `Claimed` = a volunteer
+ * is on the way) and whether this NGO already reserved it.
+ */
+export interface ApiAvailableNearbyListing extends ApiNearbyListing {
+  status: ApiListingStatus;
+  isRequestedByMe: boolean;
 }
 
 /**

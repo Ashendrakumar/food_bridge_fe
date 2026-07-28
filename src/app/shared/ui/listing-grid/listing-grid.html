@@ -10,7 +10,7 @@
     }
   </div>
 } @else if (empty()) {
-  <app-empty-state [icon]="emptyIcon()" [text]="emptyText()" />
+  <app-empty-state [icon]="emptyIcon()" [title]="emptyTitle()" [text]="emptyText()" />
 } @else {
   <div [class]="gridClasses()">
     <ng-content />

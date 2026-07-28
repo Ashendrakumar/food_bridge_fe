@@ -14,10 +14,14 @@ import { Avatar } from '@shared/ui/avatar/avatar';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sidebar.html',
   styles: `
+    /* The shell is dark in both light and dark mode — it's navigation chrome,
+       not content. Every colour in here comes from the --fb-sidebar-* ramp so it
+       re-tints with the brand palette. */
     .sidebar {
       width: 260px;
-      background: var(--fb-surface);
-      border-right: 1px solid var(--fb-line);
+      background: var(--fb-sidebar);
+      color: var(--fb-sidebar-ink);
+      border-right: 1px solid var(--fb-sidebar-line);
       padding: 22px 16px 6px;
       position: fixed;
       top: 0;
@@ -35,19 +39,30 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      margin: 0 -4px;
-      padding: 0 4px;
+      /* Bleed back over the sidebar's 16px gutter so a row can run edge to
+         edge. Rows re-add the inset as their own padding, which keeps the
+         label aligned with the brand block while the background stays full
+         width. Kept in sync with .sidebar.collapsed's narrower padding below. */
+      margin: 0 -16px;
+      padding: 0;
     }
     .nav-fb a {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 11px 14px;
-      border-radius: 12px;
-      color: var(--fb-muted);
+      padding: 11px 26px;
+      border-radius: 0;
+      color: var(--fb-sidebar-muted);
       text-decoration: none;
       font-weight: 500;
       font-size: 14.5px;
+      /* Stated explicitly, and inherited by the icon below, so both children of
+         this flex row produce the SAME line box. Font Awesome ships
+         line-height 1 on its icons while the label inherits Tailwind's 1.5 —
+         which meant the label was the tallest child and set the row height. On
+         collapse the label is hidden, the row fell back to the icon's shorter
+         box, and every row lost ~7px, jumping the whole list upward. */
+      line-height: 1.5;
       cursor: pointer;
       transition: all 0.15s ease;
       white-space: nowrap;
@@ -57,22 +72,55 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       width: 20px;
       text-align: center;
       flex-shrink: 0;
+      line-height: inherit;
     }
     .nav-fb a:hover {
-      background: var(--fb-primary-soft);
-      color: var(--fb-primary-deep);
+      background: var(--fb-sidebar-raised);
+      color: var(--fb-sidebar-ink);
     }
     .nav-fb a.active {
-      background: linear-gradient(135deg, var(--fb-primary), var(--fb-primary-deep));
-      color: #fff;
-      box-shadow: 0 6px 16px rgba(182, 92, 63, 0.25);
+      /* No solid fill. Against a 13%-lightness shell a brand block is caught
+         between two failures: dark enough to hold white text means it barely
+         separates from the shell, light enough to separate means the text
+         stops being legible. So the state is carried by an edge marker and a
+         wash instead, which lets the label sit at the sidebar's own audited
+         ink colour rather than pure white on an unpredictable fill.
+
+         Uses --fb-primary-bright rather than --fb-primary because the bright
+         ramp is the one tuned to read against dark surfaces.
+
+         The wash is a gradient that decays to fully transparent at the right
+         edge: the row runs flush into the content border with no corner, so a
+         flat fill would end in a hard vertical seam there. Fading it out means
+         the row has no right edge to draw badly. */
+      background: linear-gradient(
+        90deg,
+        rgb(var(--fb-primary-bright-rgb) / 0.26) 0%,
+        rgb(var(--fb-primary-bright-rgb) / 0.1) 55%,
+        rgb(var(--fb-primary-bright-rgb) / 0) 100%
+      );
+      color: var(--fb-sidebar-ink);
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 var(--fb-primary-bright);
+    }
+    .nav-fb a.active i {
+      color: var(--fb-primary-bright);
+    }
+    .nav-fb a.active:hover {
+      background: linear-gradient(
+        90deg,
+        rgb(var(--fb-primary-bright-rgb) / 0.34) 0%,
+        rgb(var(--fb-primary-bright-rgb) / 0.14) 55%,
+        rgb(var(--fb-primary-bright-rgb) / 0) 100%
+      );
+      color: var(--fb-sidebar-ink);
     }
 
     /* User footer + popover */
     .side-user {
       position: relative;
       padding-top: 6px;
-      border-top: 1px solid var(--fb-line);
+      border-top: 1px solid var(--fb-sidebar-line);
       flex-shrink: 0;
     }
     .side-user-btn {
@@ -91,8 +139,8 @@ import { Avatar } from '@shared/ui/avatar/avatar';
     }
     .side-user-btn:hover,
     .side-user-btn.is-open {
-      background: var(--fb-primary-soft);
-      border-color: var(--fb-primary);
+      background: var(--fb-sidebar-raised);
+      border-color: var(--fb-sidebar-line);
     }
     .side-user-avatar {
       width: 40px;
@@ -105,12 +153,18 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       font-weight: 700;
       font-size: 14px;
       flex-shrink: 0;
-      background: linear-gradient(135deg, var(--fb-orange), #e8621f);
+      background: linear-gradient(135deg, var(--fb-accent), var(--fb-accent-deep));
       object-fit: cover;
     }
     .side-user-info {
       min-width: 0;
       flex: 1;
+      /* Same reason as the nav rows: the role badge is inline-flex, so it sits
+         in an anonymous line box whose strut would inherit line-height 1.5 and
+         push this block past the 40px avatar. At 1.2 the badge itself sets that
+         box, the avatar stays the tallest child, and hiding this text on
+         collapse leaves the footer's height unchanged. */
+      line-height: 1.2;
     }
     .side-user-name {
       font-weight: 600;
@@ -121,11 +175,11 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       white-space: nowrap;
     }
     .side-user-role {
-      color: var(--fb-muted);
+      color: var(--fb-sidebar-muted);
       font-size: 11.5px;
     }
     .side-user-chev {
-      color: var(--fb-muted);
+      color: var(--fb-sidebar-muted);
       font-size: 12px;
       flex-shrink: 0;
       transition: transform 0.15s ease;
@@ -144,6 +198,9 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       border-radius: 16px;
       box-shadow: var(--fb-shadow-lg);
       padding: 8px;
+      /* Reset the shell's light-on-dark text — this panel sits on a card
+         surface, not on the dark sidebar. */
+      color: var(--fb-ink);
     }
     .popover-item {
       display: flex;
@@ -199,6 +256,10 @@ import { Avatar } from '@shared/ui/avatar/avatar';
       }
       .sidebar.collapsed .nav-fb a {
         padding: 11px 0;
+      }
+      /* Match the rail's narrower gutter so rows still reach both edges. */
+      .sidebar.collapsed .nav-scroll {
+        margin: 0 -12px;
       }
       .sidebar.collapsed .user-popover {
         left: 0;

@@ -70,7 +70,14 @@
         <app-input class="col-span-12" formControlName="address" placeholder="Address" />
         <app-input class="col-span-6" formControlName="city" placeholder="City" />
         <app-input class="col-span-3" formControlName="state" placeholder="State" />
-        <app-input class="col-span-3" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" />
+        <app-input
+          class="col-span-3"
+          type="tel"
+          [maxlength]="6"
+          inputmode="numeric"
+          formControlName="pincode"
+          placeholder="Pincode"
+        />
 
         @if (isRecipient()) {
           <div class="col-span-12">
@@ -135,6 +142,8 @@
         </p>
       } @else if (locationError()) {
         <p class="text-red-500 text-xs mb-3">{{ locationError() }}</p>
+      } @else {
+        <p class="fb-help mb-3">Drop a pin on the map to set your location</p>
       }
       <div class="mb-3">
         <app-button

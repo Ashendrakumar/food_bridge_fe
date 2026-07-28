@@ -37,7 +37,8 @@ Backend: Phase 4.
 Backend: Phase 5.
 - [x] Nearby (`GET /listings/nearby`, uses saved location) with **infinite scroll** + skeletons; claim → `VolunteerDeliveriesStore`.
 - [x] Confirm pickup / delivery with required photo.
-- Known gap: active-deliveries list is session-scoped (backend has no "my active deliveries" list endpoint).
+- [x] **My Deliveries** restyled to match Nearby (listing cards + stage filter chips + summary card): full pickup/deadline/ETA/prepared detail, donor + recipient contacts, drop-off banner, distance to the next stop, and a **route dialog** (you → pickup → drop-off) with "Open in Google Maps". Claims persist per user in `localStorage`.
+- Known gap: the claimed list is client-tracked, not server-read (backend has no "my active deliveries" endpoint and `GET /listings` is DonorOnly).
 
 ## Phase 5 — Recipient side — ✅ *(newly completed)*
 Backend: Phase 6.
@@ -58,21 +59,30 @@ Backend: Phase 7.
 ## Phase 7 — Certificates, Leaderboard, Reports — ✅ *(newly completed)*
 Backend: Phase 8.
 - [x] **Certificates** (donor): `GET /certificates` + **PDF download** (blob, auth header attached).
-- [x] **Leaderboard** (volunteer): `GET /leaderboard`, highlights the current user; `leaderboard/me` available via `VolunteerService.myRank()`.
-- [x] **Reports** (recipient): `GET /reports/recipient` with real totals + monthly bar chart.
-- [x] Report services for donor/volunteer/platform exist (`ReportService`) — no dedicated donor/volunteer report *pages* yet (could feed the dashboard).
+- [x] **Leaderboard** (volunteer): `GET /leaderboard` + `GET /leaderboard/me` in one `forkJoin` (a failing `me` degrades to the caller's row in the ranked page rather than blanking the board). Your-standing hero card with points-to-next-place, top-3 podium, and a full ranking with medal-tinted rank pills and share-of-leader rails.
+- [x] **Reports** (recipient): `GET /reports/recipient` — 4 stat tiles (two reported, two derived: meals/delivery and active months), monthly bar chart beside a month-by-month breakdown with a best-month callout, and **CSV export** (`shared/util/csv.ts`).
+- [x] **History** (volunteer + recipient): totals + monthly chart from the role's report endpoint; rows from `GET /listings/history` (recipient) or `VolunteerDeliveriesStore.completed` (volunteer, with an on-page note that older deliveries aren't listed individually). CSV export on both.
+- [x] Report services for donor/volunteer/platform exist (`ReportService`) — the volunteer report now backs the History page; no dedicated donor report *page* yet (could feed the dashboard).
 
 ## Phase 8 — Admin — 🟡 *(service wired, pages pending)*
 Backend: Phase 9.
 - [x] `AdminService` wired to real endpoints: dashboard, listings, accounts, verify/suspend, disputes (list/raise/resolve), platform report.
 - [ ] Admin pages (dashboard, all-listings, verifications, disputes, platform reports) still render mock data.
 
-## Phase 9 — Phase-11 backend additions (frontend TODO) — ⬜
+## Phase 9 — Phase-11 backend additions (frontend TODO) — 🟡
 Backend: Phase 11 added these; frontend not yet using them.
 - [ ] Show **contact info** on listings (`donorName`/`donorMobile`, etc. — already on `ApiListing`, gated by backend).
-- [ ] **Diet/meal filters** on My Listings + Nearby.
-- [ ] **Unclaim** button for volunteers (`POST /listings/{id}/unclaim`).
+- [ ] **Diet/meal filters** on My Listings. *(Nearby done — server-side `dietType`/`mealType`.)*
+- [x] **Unclaim** button for volunteers (`POST /listings/{id}/unclaim`) — on the Nearby card after a claim.
 - [ ] **Raise a dispute** action (`POST /disputes`) for any party on a listing.
+
+## Phase 12 — Dashboards, pickup ETA, drop-off & notifications — ✅ *(newly completed)*
+Backend: consolidated dashboard endpoints + listing/claim/notification additions.
+- [x] **Consolidated dashboards** — `DashboardService` calls `GET /dashboard/{donor|volunteer|recipient}`; the shared `Dashboard` component now renders **real** stat tiles, a monthly bar chart (`*ByMonth`), and role lists (recent activity, nearby recipients, open listings, badges, incoming food, top donors). Admin tab uses the existing `admin/dashboard` incl. new `listingsByStatus`/`accountsByStatus`. Mock `STATS`/`ListingStore` no longer used here.
+- [x] **Pickup ETA on claim** — `ListingService.claim(id, estimatedPickupAtUtc?)` sends the optional `?estimatedPickupAtUtc=` query; volunteer **claim dialog** lets them set an optional ETA (bounded by the pickup deadline; keeps dialog open on 422 to adjust).
+- [x] **`estimatedPickupAtUtc` + `suggestedDropOffLocation`** added to `ApiListing`; deliveries cards show the ETA and a **drop-off banner** (with tailored confirm-pickup toast) when no recipient could be matched.
+- [x] **Notification type → icon/colour** map (`notificationMeta`) in the topbar, covering `NewListingNearby`, `DropOffLocationSuggested`, `DonationConfirmed`, `PointsAwarded`, `Local`. (Still REST-only — no SignalR hub client yet.)
+- [x] `DropOffLocation` model + `dropoff-locations` endpoints registered (admin CRUD UI not built — surfaces only via `suggestedDropOffLocation`).
 
 ## Phase 10 — Polish & hardening — 🟡
 - [x] Demo copy removed from login/OTP; toast dedupe + fixed width; button borders normalized.

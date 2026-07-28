@@ -22,6 +22,8 @@ export class ListingGrid {
   readonly empty = input(false);
   readonly emptyIcon = input('fa-solid fa-box-open');
   readonly emptyText = input('Nothing here yet');
+  /** Optional headline; when set, `emptyText` drops to the supporting line. */
+  readonly emptyTitle = input('');
   readonly skeletonCount = input(6);
   /** Responsive column utilities appended to the base `grid gap-4`. */
   readonly gridClass = input('lg:grid-cols-3');

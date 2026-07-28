@@ -21,15 +21,18 @@ export interface ListingCardData {
   freshnessTag: FreshnessTag;
   pickupDeadlineUtc: string;
   status: ApiListingStatus;
-  createdAtUtc: string;
+  /** Start of the pickup window; the deadline meter falls back to deadline − 6h without it. */
+  createdAtUtc?: string;
 }
 
 /**
  * Reusable listing card: icon + title + food type, colour status badge, attribute
- * chips, an optional deadline meter, and a projected footer for action buttons.
+ * chips, an optional projected meta line, an optional deadline meter, and a
+ * projected footer for action buttons.
  *
  * @example
- * <app-listing-card [listing]="l" [deadline]="true" [hasFooter]="true">
+ * <app-listing-card [listing]="l" [deadline]="true" [hasMeta]="true" [hasFooter]="true">
+ *   <div cardMeta>…address / distance…</div>
  *   <div cardFooter class="flex gap-2.5">…buttons…</div>
  * </app-listing-card>
  */
@@ -51,6 +54,8 @@ export class ListingCard {
   readonly iconBg = input('var(--fb-primary)');
   readonly deadline = input(true);
   readonly clickable = input(false);
+  /** Render the `[cardMeta]` slot (extra lines under the chips, e.g. address + distance). */
+  readonly hasMeta = input(false);
   readonly hasFooter = input(false);
 
   readonly cardClick = output<void>();

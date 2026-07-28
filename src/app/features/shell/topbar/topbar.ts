@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
@@ -8,20 +7,20 @@ import { RoleBadge } from '@shared/ui/role-badge/role-badge';
 import { Avatar } from '@shared/ui/avatar/avatar';
 import { AvailabilityService } from '@core/services/availability.service';
 import { LayoutService } from '@core/services/layout.service';
-import { NotificationService } from '@core/services/notification.service';
-import { ThemeService } from '@core/services/theme.service';
 import { ToastService } from '@core/services/toast.service';
+import { AvailabilityToggle } from '@shared/ui/availability-toggle/availability-toggle';
+import { NotificationBell } from '../notification-bell/notification-bell';
 
 @Component({
   selector: 'app-topbar',
-  imports: [RoleBadge, Avatar, DatePipe],
+  imports: [RoleBadge, Avatar, NotificationBell, AvailabilityToggle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './topbar.html',
   styles: `
     .topbar {
       background: var(--fb-surface);
       border-bottom: 1px solid var(--fb-line);
-      padding: 14px 28px;
+      padding: 14px 28px 14px 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -100,51 +99,6 @@ import { ToastService } from '@core/services/toast.service';
       transform: translateY(-50%);
       color: var(--fb-muted);
     }
-    .notif-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      background: var(--fb-orange);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      width: 17px;
-      height: 17px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .active-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      height: 42px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid var(--fb-line);
-      background: var(--fb-surface);
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--fb-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .active-toggle .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--fb-muted);
-    }
-    .active-toggle.is-on {
-      border-color: var(--fb-success);
-      color: var(--fb-success-deep);
-      background: var(--fb-success-soft);
-    }
-    .active-toggle.is-on .dot {
-      background: var(--fb-success);
-      box-shadow: 0 0 0 4px rgba(30, 158, 92, 0.18);
-    }
     .dropdown-panel {
       position: absolute;
       right: 0;
@@ -170,23 +124,6 @@ import { ToastService } from '@core/services/toast.service';
       background: var(--fb-primary-soft);
       color: var(--fb-primary-deep);
     }
-    .notif-item {
-      display: flex;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-    }
-    .notif-item:hover {
-      background: var(--fb-primary-soft);
-    }
-    .notif-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--fb-orange);
-      flex-shrink: 0;
-      margin-top: 6px;
-    }
     .menu-backdrop {
       position: fixed;
       inset: 0;
@@ -198,9 +135,7 @@ export class Topbar {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
-  protected readonly theme = inject(ThemeService);
   protected readonly layout = inject(LayoutService);
-  protected readonly notifications = inject(NotificationService);
   protected readonly availability = inject(AvailabilityService);
   protected readonly pickup = inject(PickupAddressService);
 
@@ -213,10 +148,16 @@ export class Topbar {
   protected readonly avatarUrl = computed(() => this.auth.currentUser()?.avatarUrl ?? null);
   protected readonly role = computed(() => this.auth.currentUser()?.role ?? null);
 
-  protected toggleNotif(): void {
-    this.menuOpen.set(false);
-    this.addrOpen.set(false);
-    this.notifOpen.update((open) => !open);
+  /**
+   * The bell owns its own open/close; the topbar only enforces that opening it
+   * dismisses the sibling menus (and that the shared backdrop stays in sync).
+   */
+  protected onNotifOpenChange(open: boolean): void {
+    if (open) {
+      this.menuOpen.set(false);
+      this.addrOpen.set(false);
+    }
+    this.notifOpen.set(open);
   }
 
   protected toggleMenu(): void {

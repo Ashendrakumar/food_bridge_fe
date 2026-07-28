@@ -16,9 +16,8 @@ import {
 } from '@angular/google-maps';
 import { environment } from '@env/environment';
 import { GoogleMapsLoaderService } from '@core/services/google-maps-loader.service';
-import { FbLatLng, FbMapConfig, FbMapMarker } from './fb-map.model';
-
-const BRAND_PRIMARY = '#d87757';
+import { ThemeService } from '@core/services/theme.service';
+import { FbLatLng, FbMapConfig, FbMapMarker, FbRouteLeg, FbRouteSummary } from './fb-map.model';
 
 /**
  * Reusable, configuration-driven Google Map.
@@ -48,13 +47,13 @@ const BRAND_PRIMARY = '#d87757';
             (mapClick)="onMapClick($event)"
           >
             @if (mode() === 'route' && directions()) {
-              <map-directions-renderer [directions]="directions()!" />
+              <map-directions-renderer [directions]="directions()!" [options]="rendererOptions()" />
             }
 
             @if (mode() === 'picker') {
               <map-marker
                 [position]="pickerPosition()"
-                [icon]="pinIcon(BRAND_PRIMARY, '')"
+                [icon]="pinIcon(brandPrimary(), '')"
                 [options]="{ draggable: true }"
                 (mapDragend)="onPickerDrag($event)"
               />
@@ -64,7 +63,7 @@ const BRAND_PRIMARY = '#d87757';
               <map-marker
                 [position]="m.position"
                 [title]="m.title ?? ''"
-                [icon]="pinIcon(m.color ?? BRAND_PRIMARY, m.label ?? '')"
+                [icon]="pinIcon(m.color ?? brandPrimary(), m.label ?? '')"
                 [options]="{ draggable: !!m.draggable }"
               />
             }
@@ -144,7 +143,7 @@ const BRAND_PRIMARY = '#d87757';
       /* Faux-map backdrop (from the HTML sample) shown behind every state. */
       background:
         radial-gradient(circle at 20% 30%, rgba(30, 158, 92, 0.1), transparent 45%),
-        radial-gradient(circle at 80% 75%, rgba(255, 122, 61, 0.12), transparent 45%),
+        radial-gradient(circle at 80% 75%, rgb(var(--fb-accent-rgb) / 0.12), transparent 45%),
         linear-gradient(135deg, #eef3ef, #f6efe9);
       background-color: #eef3ef;
     }
@@ -252,19 +251,34 @@ export class FbMap {
   protected readonly loader = inject(GoogleMapsLoaderService);
   private readonly directionsService = inject(MapDirectionsService);
 
-  protected readonly BRAND_PRIMARY = BRAND_PRIMARY;
+  /** Pins are baked into an SVG data URI, so they need a literal hex rather
+   *  than a CSS var. This signal re-emits when the brand palette changes. */
+  private readonly theme = inject(ThemeService);
+  protected readonly brandPrimary = this.theme.primaryHex;
 
   readonly config = input<FbMapConfig>({});
   /** Emits the chosen coordinates in `picker` mode (drag or click). */
   readonly locationChange = output<FbLatLng>();
+  /** Emits totals + per-leg distance/duration once `route` mode resolves (null on failure). */
+  readonly routeResolved = output<FbRouteSummary | null>();
 
   protected readonly mode = computed(() => this.config().mode ?? 'markers');
   protected readonly zoom = computed(() => this.config().zoom ?? environment.mapDefaultZoom);
   protected readonly height = computed(() => this.config().height ?? 440);
   protected readonly markers = computed<FbMapMarker[]>(() => this.config().markers ?? []);
   protected readonly legend = computed(() => this.config().legend ?? []);
-  protected readonly distanceLabel = computed(() => this.config().distanceLabel ?? '');
-  protected readonly etaLabel = computed(() => this.config().etaLabel ?? '');
+  /** Distance/ETA overlays fall back to what Google actually returned for the route. */
+  protected readonly distanceLabel = computed(
+    () => this.config().distanceLabel ?? this.summary()?.distanceText ?? '',
+  );
+  protected readonly etaLabel = computed(() => {
+    const explicit = this.config().etaLabel;
+    if (explicit != null) {
+      return explicit;
+    }
+    const s = this.summary();
+    return s ? `Est. ${s.durationText}` : '';
+  });
   protected readonly placeholderText = computed(
     () => this.config().placeholderText ?? 'Map preview',
   );
@@ -288,6 +302,17 @@ export class FbMap {
 
   /** Computed directions result for `route` mode. */
   protected readonly directions = signal<google.maps.DirectionsResult | null>(null);
+  /** Distance/duration of the resolved route, used for the auto ETA overlay. */
+  private readonly summary = signal<FbRouteSummary | null>(null);
+
+  protected readonly rendererOptions = computed<google.maps.DirectionsRendererOptions>(() => ({
+    suppressMarkers: this.config().suppressRouteMarkers ?? false,
+    polylineOptions: {
+      strokeColor: this.config().routeColor ?? this.brandPrimary(),
+      strokeWeight: 5,
+      strokeOpacity: 0.85,
+    },
+  }));
 
   constructor() {
     // Kick off the API load as soon as the component is created.
@@ -319,9 +344,47 @@ export class FbMap {
           ('DRIVING' as google.maps.TravelMode),
       };
       this.directionsService.route(request).subscribe((res) => {
-        this.directions.set(res.result ?? null);
+        const result = res.result ?? null;
+        this.directions.set(result);
+        const summary = this.summarise(result);
+        this.summary.set(summary);
+        this.routeResolved.emit(summary);
       });
     });
+  }
+
+  /** Fold the first route's legs into per-leg + total distance/duration. */
+  private summarise(result: google.maps.DirectionsResult | null): FbRouteSummary | null {
+    const rawLegs = result?.routes?.[0]?.legs;
+    if (!rawLegs?.length) {
+      return null;
+    }
+    const legs: FbRouteLeg[] = rawLegs.map((leg) => ({
+      distanceText: leg.distance?.text ?? '—',
+      durationText: leg.duration?.text ?? '—',
+      distanceMeters: leg.distance?.value ?? 0,
+      durationSeconds: leg.duration?.value ?? 0,
+    }));
+    const distanceMeters = legs.reduce((sum, l) => sum + l.distanceMeters, 0);
+    const durationSeconds = legs.reduce((sum, l) => sum + l.durationSeconds, 0);
+    return {
+      legs,
+      distanceMeters,
+      durationSeconds,
+      distanceText: this.formatDistance(distanceMeters),
+      durationText: this.formatDuration(durationSeconds),
+    };
+  }
+
+  private formatDistance(meters: number): string {
+    return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
+  }
+
+  private formatDuration(seconds: number): string {
+    const totalMinutes = Math.max(1, Math.round(seconds / 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return hours ? `${hours} hr ${minutes} min` : `${minutes} min`;
   }
 
   protected onMapClick(event: google.maps.MapMouseEvent | google.maps.IconMouseEvent): void {

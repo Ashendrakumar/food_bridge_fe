@@ -4,36 +4,39 @@ import { Certificate } from '@core/models/certificate.model';
 import { CertificateService } from '@core/services/certificate.service';
 import { ToastService } from '@core/services/toast.service';
 import { EmptyState } from '@shared/ui/empty-state/empty-state';
+import { PageWrapper } from '@shared/ui/page-wrapper/page-wrapper';
 
 @Component({
   selector: 'app-certificates',
-  imports: [EmptyState, DatePipe],
+  imports: [EmptyState, DatePipe, PageWrapper],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h3 class="page-title">Certificates</h3>
-    <p class="page-subtitle">CSR-ready proof for every confirmed donation.</p>
-
-    @if (loading()) {
-      <div class="card-fb p-6 text-muted"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading certificates…</div>
-    } @else {
-      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        @for (c of certificates(); track c.id) {
-          <div class="card-fb p-4 text-center">
-            <i class="fa-solid fa-award text-3xl text-primary mb-2"></i>
-            <div class="font-semibold text-sm">{{ c.certificateNumber }}</div>
-            <div class="text-muted text-xs mb-1">{{ c.mealsCount }} meals · {{ c.issuedAtUtc | date: 'MMM d, y' }}</div>
-            <button class="btn-fb-outline w-full !py-2 !text-sm mt-2" [disabled]="downloadingId() === c.id" (click)="download(c)">
-              <i class="fa-solid mr-1" [class]="downloadingId() === c.id ? 'fa-spinner fa-spin' : 'fa-download'"></i>
-              {{ downloadingId() === c.id ? 'Preparing…' : 'View & Download' }}
-            </button>
-          </div>
-        } @empty {
-          <div class="md:col-span-2 lg:col-span-3">
-            <app-empty-state icon="fa-solid fa-award" text="No certificates yet — complete a delivery to earn one" />
-          </div>
-        }
-      </div>
-    }
+    <app-page-wrapper
+      title="Certificates"
+      description="CSR-ready proof for every confirmed donation."
+    >
+      @if (loading()) {
+        <div class="card-fb p-6 text-muted"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading certificates…</div>
+      } @else {
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          @for (c of certificates(); track c.id) {
+            <div class="card-fb p-4 text-center">
+              <i class="fa-solid fa-award text-3xl text-primary mb-2"></i>
+              <div class="font-semibold text-sm">{{ c.certificateNumber }}</div>
+              <div class="text-muted text-xs mb-1">{{ c.mealsCount }} meals · {{ c.issuedAtUtc | date: 'MMM d, y' }}</div>
+              <button class="btn-fb-outline w-full !py-2 !text-sm mt-2" [disabled]="downloadingId() === c.id" (click)="download(c)">
+                <i class="fa-solid mr-1" [class]="downloadingId() === c.id ? 'fa-spinner fa-spin' : 'fa-download'"></i>
+                {{ downloadingId() === c.id ? 'Preparing…' : 'View & Download' }}
+              </button>
+            </div>
+          } @empty {
+            <div class="md:col-span-2 lg:col-span-3">
+              <app-empty-state icon="fa-solid fa-award" text="No certificates yet — complete a delivery to earn one" />
+            </div>
+          }
+        </div>
+      }
+    </app-page-wrapper>
   `,
 })
 export class Certificates {

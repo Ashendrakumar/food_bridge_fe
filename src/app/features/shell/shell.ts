@@ -1,13 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { LayoutService } from '@core/services/layout.service';
-import { LocationPermissionModal } from '@shared/ui/location-permission-modal/location-permission-modal';
 import { Sidebar } from './sidebar/sidebar';
 import { Topbar } from './topbar/topbar';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, Sidebar, Topbar, LocationPermissionModal],
+  imports: [RouterOutlet, Sidebar, Topbar],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styles: `

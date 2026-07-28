@@ -8,6 +8,7 @@ import { PickupAddress, PickupAddressService } from '@core/services/pickup-addre
 import { ToastService } from '@core/services/toast.service';
 import { UserService } from '@core/services/user.service';
 import { UpdateProfileBody, UserProfile } from '@core/models/user.model';
+import { AvailabilityToggle } from '@shared/ui/availability-toggle/availability-toggle';
 import { FbButton } from '@shared/ui/button/button';
 import { FbInput } from '@shared/ui/input/input';
 import { FbMap } from '@shared/ui/map/fb-map';
@@ -15,187 +16,187 @@ import { FbLatLng, FbMapConfig } from '@shared/ui/map/fb-map.model';
 import { RoleBadge } from '@shared/ui/role-badge/role-badge';
 import { Avatar } from '@shared/ui/avatar/avatar';
 import { environment } from '@env/environment';
+import { PageWrapper } from '@shared/ui/page-wrapper/page-wrapper';
 
 /** Address-form controls that carry validation, in display order. */
 const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
 
 @Component({
   selector: 'app-profile',
-  imports: [ReactiveFormsModule, FbInput, FbButton, RoleBadge, Avatar, FbMap],
+  imports: [ReactiveFormsModule, FbInput, FbButton, RoleBadge, Avatar, FbMap, AvailabilityToggle, PageWrapper],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h3 class="page-title mb-4">Profile</h3>
-
-
-    @if (loading()) {
-      <div class="card-fb p-5 max-w-xl text-muted">
-        <i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading your profile…
-      </div>
-    } @else if (profile(); as u) {
-      <div class="grid gap-4 lg:grid-cols-2">
-        <form [formGroup]="form" class="card-fb p-5 max-w-xl">
-        <div class="flex items-center gap-3 mb-5">
-          <div class="relative">
-            <app-avatar [name]="u.name" [imageUrl]="u.avatarUrl" [size]="64" />
-            <button type="button" class="photo-btn" title="Change photo" (click)="photoInput.click()">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-            <input #photoInput type="file" accept="image/jpeg,image/png" hidden (change)="onPhoto($event)" />
-          </div>
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-semibold text-lg">{{ u.name }}</span>
-              @if (statusMeta(u.accountStatus); as s) {
-                <span class="acc-badge" [class]="s.cls">
-                  <i [class]="s.icon" aria-hidden="true"></i>{{ u.accountStatus }}
-                </span>
-              }
-            </div>
-            <div class="flex items-center gap-2 flex-wrap mt-1.5">
-              <app-role-badge [role]="u.role" size="sm" />
-              <span class="text-muted text-sm">{{ u.city || '—' }}</span>
-            </div>
-          </div>
+    <app-page-wrapper
+      title="Profile"
+      description="Your details, contact number and the location we match you from."
+    >
+      @if (loading()) {
+        <div class="card-fb p-5 max-w-xl text-muted">
+          <i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading your profile…
         </div>
-
-        @if (canToggleAvailability()) {
-          <div class="flex items-center justify-between card-fb p-3 mb-4">
-            <div>
-              <div class="font-semibold text-sm">Availability</div>
-              <div class="text-muted text-xs">
-                {{ availability.isActive() ? 'Active — visible for matching' : 'Offline — not receiving new work' }}
-              </div>
-              @if (!availability.isActive()) {
-                <div class="text-muted text-xs mt-0.5">
-                  <i class="fa-solid fa-location-crosshairs mr-1"></i>Going active shares your current location.
-                </div>
-              }
+      } @else if (profile(); as u) {
+        <div class="grid gap-4 lg:grid-cols-2">
+          <form [formGroup]="form" class="card-fb p-5 max-w-xl">
+          <!-- Identity block. The name gets its own line so a long org name can
+               never collide with the status badge, and the meta row below keeps
+               role / city / status on one baseline. -->
+          <div class="id-head">
+            <div class="relative shrink-0">
+              <app-avatar [name]="u.name" [imageUrl]="u.avatarUrl" [size]="64" />
+              <button type="button" class="photo-btn" title="Change photo" (click)="photoInput.click()">
+                <i class="fa-solid fa-camera"></i>
+              </button>
+              <input #photoInput type="file" accept="image/jpeg,image/png" hidden (change)="onPhoto($event)" />
             </div>
-            <button
-              type="button"
-              [class]="(availability.isActive() ? 'btn-fb' : 'btn-fb-outline') + ' !py-1.5 !px-4 !text-sm'"
-              [disabled]="availability.busy()"
-              (click)="availability.toggle()"
-            >
-              @if (availability.busy()) {
-                <i class="fa-solid fa-spinner fa-spin mr-1"></i>
-              }
-              {{ availability.isActive() ? 'Active' : 'Offline' }}
-            </button>
-          </div>
-        }
-
-        <div class="grid sm:grid-cols-2 gap-3">
-          <app-input label="Mobile" prefix="+91" prefixIcon="fa-solid fa-phone" formControlName="mobile" />
-          <app-input label="City" formControlName="city" />
-          <app-input class="sm:col-span-2" label="Full Name" formControlName="name" />
-          <app-input class="sm:col-span-2" label="Address" formControlName="address" />
-          @if (isRecipient()) {
-            <app-input label="Recipient Type" formControlName="recipientType" />
-            <app-input
-              type="number"
-              [label]="u.recipientType === 'Organization' ? 'Serving Capacity (meals/day)' : 'Household Size'"
-              formControlName="capacity"
-            />
-          }
-        </div>
-        <div class="mt-5">
-          <app-button icon="fa-solid fa-floppy-disk" [disabled]="saving()" (clicked)="save()">
-            {{ saving() ? 'Saving…' : 'Save Changes' }}
-          </app-button>
-        </div>
-      </form>
-
-      @if (isDonor()) {
-        <div class="card-fb p-5 max-w-xl">
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-bold"><i class="fa-solid fa-location-dot mr-2 text-primary"></i>Pickup Addresses</div>
-            <button class="btn-fb-outline !py-1.5 !px-3 !text-sm" (click)="toggleAddForm()">
-              <i class="fa-solid mr-1" [class]="addOpen() ? 'fa-xmark' : 'fa-plus'"></i>{{ addOpen() ? 'Close' : 'Add' }}
-            </button>
-          </div>
-
-          @if (pickup.loading()) {
-            <div class="text-muted text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading addresses…</div>
-          }
-          <div class="space-y-2">
-            @for (a of pickup.addresses(); track a.id) {
-              <div class="addr-row" [class.sel]="isDefault(a)">
-                <i class="fa-solid mr-2 shrink-0" [class]="isDefault(a) ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
-                <div class="flex-1 min-w-0">
-                  <div class="text-sm font-semibold truncate">{{ a.label }}</div>
-                  <div class="text-xs text-muted truncate">{{ a.address }}</div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  class="addr-switch shrink-0"
-                  [class.on]="isDefault(a)"
-                  [attr.aria-checked]="isDefault(a)"
-                  [disabled]="isDefault(a) || settingDefaultId() === a.id"
-                  [title]="isDefault(a) ? 'Default pickup address' : 'Set as default'"
-                  (click)="setDefault(a, $event)"
-                >
-                  <span class="knob"></span>
-                  <span class="addr-switch-text">
-                    @if (settingDefaultId() === a.id) {
-                      <i class="fa-solid fa-spinner fa-spin"></i>&nbsp;Saving…
-                    } @else {
-                      {{ isDefault(a) ? 'Default' : 'Set default' }}
-                    }
+            <div class="min-w-0 flex-1">
+              <h4 class="id-name">{{ u.name }}</h4>
+              <div class="id-meta">
+                <app-role-badge [role]="u.role" size="sm" />
+                @if (statusMeta(u.accountStatus); as s) {
+                  <span class="acc-badge" [class]="s.cls">
+                    <i [class]="s.icon" aria-hidden="true"></i>{{ u.accountStatus }}
                   </span>
-                </button>
-                @if (confirmRemoveId() === a.id) {
-                  <span class="addr-confirm-text">Remove?</span>
-                  <button type="button" class="addr-x addr-x-danger" title="Confirm remove" [disabled]="removingId() === a.id" (click)="removeAddr(a.id, $event)">
-                    @if (removingId() === a.id) {
-                      <i class="fa-solid fa-spinner fa-spin"></i>
-                    } @else {
-                      <i class="fa-solid fa-check"></i>
-                    }
-                  </button>
-                  <button type="button" class="addr-x" title="Keep address" (click)="cancelRemove($event)"><i class="fa-solid fa-xmark"></i></button>
-                } @else {
-                  <button type="button" class="addr-x" title="Edit" (click)="startEdit(a, $event)"><i class="fa-solid fa-pen"></i></button>
-                  <button type="button" class="addr-x" title="Remove" (click)="askRemove(a.id, $event)"><i class="fa-solid fa-trash-can"></i></button>
+                }
+                @if (u.city) {
+                  <span class="id-city">
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>{{ u.city }}
+                  </span>
                 }
               </div>
-            } @empty {
-              @if (!pickup.loading()) {
-                <div class="text-muted text-sm">No pickup addresses yet — add one below.</div>
-              }
-            }
+            </div>
           </div>
 
-          @if (addOpen()) {
-            <div class="mt-4 pt-4 border-t border-line">
-              <div class="small-label mb-2">{{ editingId() ? 'Edit address' : 'New address' }} — pin the pickup location</div>
-              <app-fb-map class="block mb-3" [config]="addMapConfig()" (locationChange)="onAddLocation($event)" />
-              <div class="mb-3">
-                <app-button variant="outline" icon="fa-solid fa-location-crosshairs" [block]="true" [loading]="geoBusy()" (clicked)="captureGps()">
-                  Use current location
-                </app-button>
-              </div>
-              <form [formGroup]="addrForm" class="grid sm:grid-cols-2 gap-3">
-                <app-input class="sm:col-span-2" label="Label" formControlName="label" placeholder="e.g. Home, Main Branch" [required]="true" [maxlength]="100" hint="A short name to recognise this location." [error]="addrErr('label')" />
-                <app-input class="sm:col-span-2" label="Address" formControlName="address" placeholder="e.g. C.G. Road, Navrangpura" [required]="true" [maxlength]="500" hint="Drop a pin or use GPS to auto-fill." [error]="addrErr('address')" />
-                <app-input label="City" formControlName="city" placeholder="City" />
-                <app-input label="Pincode" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" [error]="addrErr('pincode')" />
-              </form>
-              <div class="mt-4 flex gap-2">
-                <app-button icon="fa-solid fa-check" [disabled]="savingAddr()" (clicked)="saveAddress()">
-                  {{ savingAddr() ? 'Saving…' : editingId() ? 'Update Address' : 'Save Address' }}
-                </app-button>
-                <app-button variant="ghost" (clicked)="toggleAddForm()">Cancel</app-button>
-              </div>
-            </div>
+          @if (canToggleAvailability()) {
+            <app-availability-toggle class="mb-4" variant="row" />
           }
+
+          <div class="grid sm:grid-cols-2 gap-3">
+            <app-input label="Mobile" prefix="+91" prefixIcon="fa-solid fa-phone" formControlName="mobile" />
+            <app-input label="City" formControlName="city" />
+            <app-input class="sm:col-span-2" label="Full Name" formControlName="name" />
+            <app-input class="sm:col-span-2" label="Address" formControlName="address" />
+            @if (isRecipient()) {
+              <app-input label="Recipient Type" formControlName="recipientType" />
+              <app-input
+                type="number"
+                [label]="u.recipientType === 'Organization' ? 'Serving Capacity (meals/day)' : 'Household Size'"
+                formControlName="capacity"
+              />
+            }
+          </div>
+          <div class="mt-5">
+            <app-button icon="fa-solid fa-floppy-disk" [disabled]="saving()" (clicked)="save()">
+              {{ saving() ? 'Saving…' : 'Save Changes' }}
+            </app-button>
+          </div>
+        </form>
+
+        @if (isDonor()) {
+          <div class="card-fb p-5 max-w-xl">
+            <div class="card-head">
+              <div class="card-head-title">
+                <span class="card-head-icon">
+                  <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                  <div class="font-bold text-sm">Pickup Addresses</div>
+                  <div class="text-muted text-xs mt-0.5">
+                    {{ addressCountLabel() }}
+                  </div>
+                </div>
+              </div>
+              <app-button
+                variant="outline"
+                size="sm"
+                [icon]="addOpen() ? 'fa-solid fa-xmark' : 'fa-solid fa-plus'"
+                (clicked)="toggleAddForm()"
+              >
+                {{ addOpen() ? 'Close' : 'Add address' }}
+              </app-button>
+            </div>
+
+            @if (pickup.loading()) {
+              <div class="text-muted text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading addresses…</div>
+            }
+            <div class="space-y-2">
+              @for (a of pickup.addresses(); track a.id) {
+                <div class="addr-row" [class.sel]="isDefault(a)">
+                  <i class="fa-solid mr-2 shrink-0" [class]="isDefault(a) ? 'fa-circle-check text-primary' : 'fa-location-dot text-muted'"></i>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold truncate">{{ a.label }}</div>
+                    <div class="text-xs text-muted truncate">{{ a.address }}</div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    class="addr-switch shrink-0"
+                    [class.on]="isDefault(a)"
+                    [attr.aria-checked]="isDefault(a)"
+                    [disabled]="isDefault(a) || settingDefaultId() === a.id"
+                    [title]="isDefault(a) ? 'Default pickup address' : 'Set as default'"
+                    (click)="setDefault(a, $event)"
+                  >
+                    <span class="knob"></span>
+                    <span class="addr-switch-text">
+                      @if (settingDefaultId() === a.id) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>&nbsp;Saving…
+                      } @else {
+                        {{ isDefault(a) ? 'Default' : 'Set default' }}
+                      }
+                    </span>
+                  </button>
+                  @if (confirmRemoveId() === a.id) {
+                    <span class="addr-confirm-text">Remove?</span>
+                    <button type="button" class="addr-x addr-x-danger" title="Confirm remove" [disabled]="removingId() === a.id" (click)="removeAddr(a.id, $event)">
+                      @if (removingId() === a.id) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                      } @else {
+                        <i class="fa-solid fa-check"></i>
+                      }
+                    </button>
+                    <button type="button" class="addr-x" title="Keep address" (click)="cancelRemove($event)"><i class="fa-solid fa-xmark"></i></button>
+                  } @else {
+                    <button type="button" class="addr-x" title="Edit" (click)="startEdit(a, $event)"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" class="addr-x" title="Remove" (click)="askRemove(a.id, $event)"><i class="fa-solid fa-trash-can"></i></button>
+                  }
+                </div>
+              } @empty {
+                @if (!pickup.loading()) {
+                  <div class="text-muted text-sm">No pickup addresses yet — add one below.</div>
+                }
+              }
+            </div>
+
+            @if (addOpen()) {
+              <div class="mt-4 pt-4 border-t border-line">
+                <div class="small-label mb-2">{{ editingId() ? 'Edit address' : 'New address' }} — pin the pickup location</div>
+                <app-fb-map class="block mb-3" [config]="addMapConfig()" (locationChange)="onAddLocation($event)" />
+                <div class="mb-3">
+                  <app-button variant="outline" icon="fa-solid fa-location-crosshairs" [block]="true" [loading]="geoBusy()" (clicked)="captureGps()">
+                    Use current location
+                  </app-button>
+                </div>
+                <form [formGroup]="addrForm" class="grid sm:grid-cols-2 gap-3">
+                  <app-input class="sm:col-span-2" label="Label" formControlName="label" placeholder="e.g. Home, Main Branch" [required]="true" [maxlength]="100" hint="A short name to recognise this location." [error]="addrErr('label')" />
+                  <app-input class="sm:col-span-2" label="Address" formControlName="address" placeholder="e.g. C.G. Road, Navrangpura" [required]="true" [maxlength]="500" hint="Drop a pin or use GPS to auto-fill." [error]="addrErr('address')" />
+                  <app-input label="City" formControlName="city" placeholder="City" />
+                  <app-input label="Pincode" type="tel" [maxlength]="6" inputmode="numeric" formControlName="pincode" placeholder="Pincode" [error]="addrErr('pincode')" />
+                </form>
+                <div class="mt-4 flex gap-2">
+                  <app-button icon="fa-solid fa-check" [disabled]="savingAddr()" (clicked)="saveAddress()">
+                    {{ savingAddr() ? 'Saving…' : editingId() ? 'Update Address' : 'Save Address' }}
+                  </app-button>
+                  <app-button variant="ghost" (clicked)="toggleAddForm()">Cancel</app-button>
+                </div>
+              </div>
+            }
+          </div>
+        }
         </div>
+      } @else {
+        <div class="card-fb p-5 max-w-xl text-muted">Could not load your profile.</div>
       }
-      </div>
-    } @else {
-      <div class="card-fb p-5 max-w-xl text-muted">Could not load your profile.</div>
-    }
+    </app-page-wrapper>
   `,
   styles: `
     .photo-btn {
@@ -222,6 +223,73 @@ const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
       color: var(--fb-primary-deep);
       border-color: var(--fb-primary);
     }
+    /* ---- Card header with icon + subtitle ---- */
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .card-head-title {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+    .card-head-icon {
+      width: 36px;
+      height: 36px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 11px;
+      font-size: 14px;
+      background: rgb(var(--fb-primary-rgb) / 0.12);
+      color: var(--fb-primary-deep);
+      box-shadow: inset 0 0 0 1px rgb(var(--fb-primary-rgb) / 0.2);
+    }
+
+    /* ---- Identity header ---- */
+    .id-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .id-name {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      color: var(--fb-ink);
+      /* Long organisation names wrap instead of shoving the badges around. */
+      overflow-wrap: anywhere;
+    }
+    .id-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 7px;
+    }
+    .id-city {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12.5px;
+      color: var(--fb-muted);
+    }
+
+    /* ---- Account status badge ----
+       Self-tinting: the fill is an alpha wash of the badge's own accent so it
+       composites over whatever surface it sits on, and the label is pushed away
+       from that accent (darker in light mode, lighter in dark). The previous
+       version paired a fixed light fill with a fixed dark label, which inverted
+       into bright-on-near-white once dark mode flipped --fb-success-deep. */
     .acc-badge {
       display: inline-flex;
       align-items: center;
@@ -229,20 +297,26 @@ const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
       font-size: 11px;
       font-weight: 700;
       line-height: 1;
-      padding: 4px 10px;
+      padding: 5px 10px;
       border-radius: 999px;
+      background: color-mix(in srgb, var(--acc) 15%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 26%, transparent);
+      /* Label needs 4.5:1 against its own wash, so it is pushed away from the
+         accent rather than left at full saturation. --acc drives the fill, so
+         changing the text colour cannot weaken the tile. */
+      color: color-mix(in srgb, var(--acc) 74%, #000);
+    }
+    :host-context(.dark) .acc-badge {
+      color: color-mix(in srgb, var(--acc) 62%, #fff);
     }
     .acc-badge.verified {
-      background: var(--fb-success-soft);
-      color: var(--fb-success-deep);
+      --acc: #1e9e5c;
     }
     .acc-badge.pending {
-      background: var(--fb-orange-soft);
-      color: #b4551e;
+      --acc: #d97706;
     }
     .acc-badge.suspended {
-      background: rgba(224, 68, 52, 0.14);
-      color: #c0392b;
+      --acc: #e04434;
     }
     .addr-row {
       display: flex;
@@ -370,6 +444,15 @@ export class Profile {
   protected isDefault(a: PickupAddress): boolean {
     return a.id === this.pickup.selected()?.id;
   }
+
+  /** Header subtitle — gives the card a purpose line instead of a bare title. */
+  protected readonly addressCountLabel = computed(() => {
+    const n = this.pickup.addresses().length;
+    if (!n) {
+      return 'None saved yet';
+    }
+    return `${n} saved · used when posting a donation`;
+  });
 
   protected readonly addMapConfig = computed<FbMapConfig>(() => ({
     mode: 'picker',
@@ -701,7 +784,7 @@ export class Profile {
 
   private applyProfile(p: UserProfile): void {
     this.profile.set(p);
-    this.availability.hydrate(p.isAvailable);
+    this.availability.hydrate(p.isAvailable, p.accountStatus);
     this.loading.set(false);
     this.auth.patchCurrentUser({ avatarUrl: p.avatarUrl ?? undefined });
     this.form.patchValue(

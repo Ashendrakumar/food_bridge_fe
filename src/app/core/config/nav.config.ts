@@ -10,8 +10,8 @@ export interface NavItem {
 export const NAV: Record<Role, readonly NavItem[]> = {
   donor: [
     { id: 'dashboard', icon: 'fa-solid fa-gauge', label: 'Dashboard' },
-    { id: 'create', icon: 'fa-solid fa-circle-plus', label: 'Create Listing' },
-    { id: 'listings', icon: 'fa-solid fa-list-check', label: 'My Listings' },
+    { id: 'create', icon: 'fa-solid fa-circle-plus', label: 'New Donation' },
+    { id: 'listings', icon: 'fa-solid fa-list-check', label: 'My Donations' },
     { id: 'certificates', icon: 'fa-solid fa-award', label: 'Certificates' },
     { id: 'profile', icon: 'fa-solid fa-user', label: 'Profile' },
   ],

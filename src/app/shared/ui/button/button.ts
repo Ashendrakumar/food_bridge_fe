@@ -113,7 +113,7 @@ export type FbIconPosition = 'left' | 'right';
     .fb-btn.solid {
       color: #fff;
       background: linear-gradient(135deg, var(--fb-primary), var(--fb-primary-deep));
-      box-shadow: 0 8px 20px rgba(182, 92, 63, 0.25);
+      box-shadow: 0 8px 20px var(--fb-glow-primary-deep);
     }
     .fb-btn.outline {
       background: var(--fb-surface);

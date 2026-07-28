@@ -1,16 +1,19 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { APP_ROUTES } from '@core/config/app-routes';
+import { catchError, EMPTY, tap } from 'rxjs';
+import { APP_ROUTES, fromView } from '@core/config/app-routes';
 import { ApiListingSummary, toListingStatus } from '@core/models/listing-api.model';
 import { ListingStatus, STATUS_ICONS, STATUS_LABELS } from '@core/models/listing.model';
+import { DialogService } from '@core/services/dialog.service';
 import { ListingService } from '@core/services/listing.service';
 import { ToastService } from '@core/services/toast.service';
 import { InfiniteScroll } from '@shared/directives/infinite-scroll.directive';
+import { FbButton } from '@shared/ui/button/button';
 import { ListingCard } from '@shared/ui/listing-card/listing-card';
+import type { DialogRef } from '@shared/ui/dialog/dialog-ref';
 import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
-import { Pill } from '@shared/ui/pill/pill';
-import { RescueTimeline } from '@shared/ui/rescue-timeline/rescue-timeline';
+import { PageWrapper } from '@shared/ui/page-wrapper/page-wrapper';
+import { ListingDetailDialog } from './listing-detail-dialog';
 
 type Tab = 'all' | ListingStatus;
 
@@ -18,123 +21,55 @@ const PAGE_SIZE = 9;
 
 @Component({
   selector: 'app-my-listings',
-  imports: [RescueTimeline, DatePipe, InfiniteScroll, ListingCard, ListingGrid, Pill],
+  imports: [FbButton, InfiniteScroll, ListingCard, ListingGrid, PageWrapper],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h3 class="page-title">My Listings</h3>
-    <p class="page-subtitle">Track every donation from post to certificate.</p>
-
-    <div class="flex flex-wrap gap-2 mb-4">
-      @for (t of tabs; track t) {
-        <button [class]="'tab-pill ' + tabClass(t)" (click)="tab.set(t)">
-          <i [class]="tabIcon[t]"></i><span>{{ tabLabel[t] }}</span>
-        </button>
-      }
-    </div>
-
-    <app-listing-grid
-      [loading]="loading()"
-      [empty]="!filtered().length"
-      emptyIcon="fa-solid fa-box-open"
-      emptyText="No listings in this category yet"
+    <app-page-wrapper
+      title="My Donations"
+      description="Track every donation from post to certificate."
+      [hasActions]="true"
     >
-      @for (l of filtered(); track l.id) {
-        <app-listing-card [listing]="l" [clickable]="true" (cardClick)="selected.set(l)" />
-      }
-    </app-listing-grid>
+      <div pageActions>
+        <app-button icon="fa-solid fa-plus" (clicked)="create()">New Donation</app-button>
+      </div>
 
-    @if (!loading()) {
-      <div
-        appInfiniteScroll
-        [appInfiniteScrollDisabled]="loadingMore() || done()"
-        (scrolled)="loadMore()"
-        class="py-5 text-center text-muted text-sm"
-      >
-        @if (loadingMore()) {
-          <i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading more…
-        } @else if (done() && listings().length) {
-          <span class="opacity-70">You've reached the end</span>
+      <div class="flex flex-wrap gap-2 mb-4">
+        @for (t of tabs; track t) {
+          <button [class]="'tab-pill ' + tabClass(t)" (click)="tab.set(t)">
+            <i [class]="tabIcon[t]"></i><span>{{ tabLabel[t] }}</span>
+          </button>
         }
       </div>
-    }
 
-    @if (selected(); as l) {
-      <div class="fb-overlay" (click)="selected.set(null)">
-        <div class="fb-modal" (click)="$event.stopPropagation()">
-          <div class="flex justify-between items-start mb-3">
-            <div>
-              <div class="font-semibold text-lg">{{ l.title }}</div>
-              <div class="text-muted text-sm">{{ l.foodType }} · Pickup by {{ l.pickupDeadlineUtc | date: 'MMM d, h:mm a' }}</div>
-            </div>
-            <button class="btn-icon" (click)="selected.set(null)"><i class="fa-solid fa-xmark"></i></button>
-          </div>
+      <app-listing-grid
+        [loading]="loading()"
+        [empty]="!filtered().length"
+        emptyIcon="fa-solid fa-box-open"
+        emptyText="No listings in this category yet"
+      >
+        @for (l of filtered(); track l.id) {
+          <app-listing-card [listing]="l" [clickable]="true" (cardClick)="openDetail(l)" />
+        }
+      </app-listing-grid>
 
-          @if (isEnded(statusOf(l))) {
-            <div class="ended-banner">
-              <i class="fa-solid fa-circle-exclamation"></i>
-              <span>{{ endedMessage(l.status) }}</span>
-            </div>
-          } @else {
-            <app-rescue-timeline [status]="statusOf(l)" />
-          }
-
-          <div class="flex flex-wrap gap-2 mt-4">
-            <app-pill type="quantity" [value]="l.quantityMeals" />
-            <app-pill type="diet" [value]="l.dietType" />
-            <app-pill type="meal" [value]="l.mealType" />
-            <app-pill type="freshness" [value]="l.freshnessTag" />
-          </div>
-
-          @if (statusOf(l) === 'pending') {
-            <div class="flex gap-2 mt-4">
-              <button class="btn-fb-outline flex-1" (click)="edit(l)"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
-              <button class="btn-fb-outline flex-1 !text-red-600" [disabled]="cancelling()" (click)="cancel(l.id)"><i class="fa-solid fa-ban mr-1"></i>Cancel</button>
-            </div>
+      @if (!loading()) {
+        <div
+          appInfiniteScroll
+          [appInfiniteScrollDisabled]="loadingMore() || done()"
+          (scrolled)="loadMore()"
+          class="py-5 text-center text-muted text-sm"
+        >
+          @if (loadingMore()) {
+            <i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading more…
+          } @else if (done() && listings().length) {
+            <span class="opacity-70">You've reached the end</span>
           }
         </div>
-      </div>
-    }
+      }
+
+    </app-page-wrapper>
   `,
   styles: `
-    .fb-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 1050;
-      background: rgba(0, 0, 0, 0.45);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      overflow-y: auto;
-    }
-    .fb-modal {
-      background: var(--fb-surface);
-      border-radius: 22px;
-      padding: 24px;
-      width: 100%;
-      max-width: 640px;
-      margin: auto;
-      box-shadow: var(--fb-shadow-lg);
-    }
-    .ended-banner {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 12px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      background: #f1f1f1;
-      color: #7a7a7a;
-      font-size: 14px;
-      font-weight: 500;
-    }
-    :host-context(body.dark) .ended-banner {
-      background: var(--fb-bg);
-      color: var(--fb-muted);
-    }
-    .ended-banner i {
-      font-size: 18px;
-    }
     .tab-pill {
       display: inline-flex;
       align-items: center;
@@ -267,6 +202,7 @@ const PAGE_SIZE = 9;
 })
 export class MyListings {
   private readonly listingService = inject(ListingService);
+  private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -299,12 +235,10 @@ export class MyListings {
     return `t-${t}${this.tab() === t ? ' active' : ''}`;
   }
 
-  protected readonly selected = signal<ApiListingSummary | null>(null);
   protected readonly listings = signal<ApiListingSummary[]>([]);
   protected readonly loading = signal(true);
   protected readonly loadingMore = signal(false);
   protected readonly done = signal(false);
-  protected readonly cancelling = signal(false);
 
   private page = 1;
 
@@ -316,11 +250,6 @@ export class MyListings {
     return this.listings().filter((l) => this.statusOf(l) === tab);
   });
 
-  /** Ended off the happy path (expired / cancelled / rejected). */
-  protected isEnded(s: ListingStatus): boolean {
-    return s === 'expired' || s === 'cancelled' || s === 'rejected';
-  }
-
   constructor() {
     this.loadInitial();
   }
@@ -329,38 +258,100 @@ export class MyListings {
     return toListingStatus(l.status);
   }
 
-  /** Message for a listing that ended off the happy path (expired/cancelled/rejected). */
-  protected endedMessage(status: ApiListingSummary['status']): string {
-    switch (status) {
-      case 'Cancelled':
-        return 'This listing was cancelled.';
-      case 'Rejected':
-        return 'This listing was rejected.';
-      case 'Expired':
-        return 'This listing’s pickup window expired before it was claimed.';
-      default:
-        return 'This listing is no longer active.';
+  /**
+   * Show the rescue timeline for a listing. Edit and Cancel are only offered while it
+   * is still Pending — once a volunteer has claimed it, neither is allowed server-side.
+   *
+   * Cancel confirms first (a second dialog on top of this one), then returns the request
+   * so the button spins until the server answers.
+   */
+  protected openDetail(l: ApiListingSummary): void {
+    const isPending = this.statusOf(l) === 'pending';
+    this.dialog.open<ApiListingSummary, void, ListingDetailDialog>({
+      header: { title: l.title, icon: 'fa-solid fa-utensils' },
+      content: ListingDetailDialog,
+      data: l,
+      size: 'lg',
+      actions: isPending
+        ? [
+            {
+              id: 'cancel-listing',
+              label: 'Cancel donation',
+              icon: 'fa-solid fa-ban',
+              variant: 'danger',
+              align: 'start',
+              handler: (ref) => this.cancelListing(l, ref),
+            },
+            {
+              id: 'edit',
+              label: 'Edit',
+              icon: 'fa-solid fa-pen',
+              variant: 'outline',
+              handler: (ref) => {
+                ref.close();
+                this.edit(l);
+              },
+            },
+            { id: 'close', label: 'Close', variant: 'ghost', close: true },
+          ]
+        : [{ id: 'close', label: 'Close', variant: 'ghost', close: true }],
+    });
+  }
+
+  /**
+   * Open the create form; it returns here via its back button or after
+   * submitting. The `from` state is what makes that back button appear — the
+   * form hides it when opened from the sidebar or a deep link.
+   */
+  protected create(): void {
+    this.router.navigate([APP_ROUTES.appView('create')], fromView('listings'));
+  }
+
+  private edit(l: ApiListingSummary): void {
+    this.router.navigate([APP_ROUTES.appView('create')], {
+      queryParams: { edit: l.id },
+      ...fromView('listings'),
+    });
+  }
+
+  /**
+   * Confirm, then cancel. Returns the request so the detail dialog's button keeps
+   * spinning; on failure the toast explains and the dialog stays open.
+   */
+  private async cancelListing(
+    l: ApiListingSummary,
+    ref: DialogRef<void, ListingDetailDialog>,
+  ): Promise<void> {
+    const confirmed = await this.dialog.confirm({
+      title: 'Cancel this donation?',
+      message: `"${l.title}" will be withdrawn and volunteers will no longer see it. This can't be undone.`,
+      confirmLabel: 'Cancel donation',
+      cancelLabel: 'Keep it',
+      confirmVariant: 'danger',
+      icon: 'fa-solid fa-ban',
+    });
+    if (!confirmed) {
+      return;
     }
-  }
 
-  protected edit(l: ApiListingSummary): void {
-    this.selected.set(null);
-    this.router.navigate([APP_ROUTES.appView('create')], { queryParams: { edit: l.id } });
-  }
-
-  protected cancel(id: string): void {
-    this.cancelling.set(true);
-    this.listingService.cancel(id).subscribe({
-      next: () => {
-        this.cancelling.set(false);
-        this.selected.set(null);
-        this.toast.show('fa-solid fa-ban', 'Listing cancelled');
-        this.loadInitial();
-      },
-      error: (err: Error) => {
-        this.cancelling.set(false);
-        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not cancel listing');
-      },
+    await new Promise<void>((resolve) => {
+      this.listingService
+        .cancel(l.id)
+        .pipe(
+          tap(() => {
+            ref.close();
+            this.toast.show('fa-solid fa-ban', 'Listing cancelled');
+            this.loadInitial();
+          }),
+          catchError((err: Error) => {
+            this.toast.show(
+              'fa-solid fa-triangle-exclamation',
+              err.message || 'Could not cancel listing',
+            );
+            return EMPTY;
+          }),
+        )
+        .subscribe({ complete: () => resolve() });
     });
   }
 

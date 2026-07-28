@@ -23,9 +23,19 @@ export type FbInputType =
   | 'textarea'
   | 'select';
 
+/**
+ * One choice in a select. Shared by the native `<select>` rendered here and by
+ * the searchable `<app-select>`, so a list of options can move between the two
+ * without being rewritten — the extras are simply ignored by the native one.
+ */
 export interface FbSelectOption {
   value: string | number;
   label: string;
+  /** Leading icon (Font Awesome class). `<app-select>` only. */
+  icon?: string;
+  /** Secondary line under the label, also matched when searching. `<app-select>` only. */
+  description?: string;
+  disabled?: boolean;
 }
 
 let uid = 0;
@@ -104,7 +114,7 @@ let uid = 0;
               <option value="" disabled>{{ placeholder() }}</option>
             }
             @for (opt of options(); track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <option [value]="opt.value" [disabled]="!!opt.disabled">{{ opt.label }}</option>
             }
           </select>
         }
@@ -205,16 +215,8 @@ let uid = 0;
     .fb-control-prefix i {
       color: var(--fb-primary);
     }
-    .fb-msg {
-      margin: 6px 2px 0;
-      font-size: 12px;
-    }
-    .fb-msg.hint {
-      color: var(--fb-muted);
-    }
-    .fb-msg.error {
-      color: #ef4444;
-    }
+    /* .fb-msg (hint / error line) is global — shared with <app-select> and
+       <app-date-picker>. See styles.scss. */
   `,
 })
 export class FbInput implements ControlValueAccessor {

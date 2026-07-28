@@ -1,16 +1,22 @@
-<aside class="sidebar" [class.show]="layout.sidebarOpen()" [class.collapsed]="layout.collapsed()">
+<!-- `on-dark` marks this as a permanently dark surface (in both themes) so
+     descendants like app-role-badge can flip their foreground accordingly. -->
+<aside
+  class="sidebar on-dark"
+  [class.show]="layout.sidebarOpen()"
+  [class.collapsed]="layout.collapsed()"
+>
   <div class="brand flex items-center gap-2.5 px-2.5 pt-1.5 pb-5">
     <app-logo [size]="38" />
     <div class="brand-text">
       <div class="font-bold text-[15px] leading-none mb-1.5">FoodBridge</div>
-      <app-role-badge [role]="role()" size="sm" />
+      <!-- <app-role-badge [role]="role()" size="sm" /> -->
     </div>
   </div>
 
   <nav class="nav-scroll">
     <ul class="nav-fb list-none p-0 m-0">
       @for (item of navItems(); track item.id) {
-        <li class="mb-1">
+        <li>
           <a
             [routerLink]="[routes.app, item.id]"
             routerLinkActive="active"
