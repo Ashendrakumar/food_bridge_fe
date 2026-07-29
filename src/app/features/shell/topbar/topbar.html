@@ -49,8 +49,18 @@
               <div class="text-muted text-sm px-2 py-1">No saved addresses yet</div>
             }
             <hr class="my-1.5 border-line" />
-            <a class="addr-item text-primary-deep font-semibold" (click)="goToAddAddress()">
-              <i class="fa-solid fa-plus mr-2"></i>Add new address
+            <!-- A real href, so the new tab is the browser's own navigation and
+                 middle-click / ctrl-click behave the same as a plain click. -->
+            <a
+              class="addr-add"
+              [routerLink]="profileLink"
+              target="_blank"
+              rel="noopener"
+              (click)="closeMenus()"
+            >
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>Add new address
+              <i class="fa-solid fa-up-right-from-square ext" aria-hidden="true"></i>
+              <span class="sr-only">(opens in a new tab)</span>
             </a>
           </div>
         }

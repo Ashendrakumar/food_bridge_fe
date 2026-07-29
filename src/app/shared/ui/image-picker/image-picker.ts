@@ -15,12 +15,22 @@ import type { DialogRef } from '@shared/ui/dialog/dialog-ref';
 import { CameraDialog, CameraResult } from './camera-dialog';
 
 /**
+ * Which ways of supplying an image this instance offers.
+ *
+ * `camera` degrades to `upload` where getUserMedia isn't available (insecure
+ * origins, some in-app browsers) — a field that offered no working path at all
+ * would simply be a dead end.
+ */
+export type ImageSource = 'both' | 'upload' | 'camera';
+
+/**
  * Pick an image by file, drag-and-drop, or the device camera, then preview and
  * remove it. One component for every image field in the app.
  *
  * The parent gets the raw `File` and owns the upload — this component never
  * touches the network, so it works the same for upload-on-pick (avatar) and
- * hold-until-submit (a new listing) flows.
+ * hold-until-submit (a new listing) flows. To collect a photo in a modal
+ * instead of inline, use `openPhotoDialog()`, which wraps this.
  *
  * @example
  * <app-image-picker
@@ -28,6 +38,7 @@ import { CameraDialog, CameraResult } from './camera-dialog';
  *   hint="Helps volunteers recognise the food."
  *   [existingUrl]="listing.imageUrl"
  *   (fileChange)="photoFile = $event" />
+ * <app-image-picker sources="camera" label="Proof of delivery" />
  */
 @Component({
   selector: 'app-image-picker',
@@ -54,16 +65,18 @@ import { CameraDialog, CameraResult } from './camera-dialog';
             <span class="meta-text">{{ metaLabel() }}</span>
           </span>
           <span class="bar-actions">
-            <button
-              type="button"
-              class="icon-btn"
-              title="Replace image"
-              aria-label="Replace image"
-              [disabled]="disabled()"
-              (click)="browse()"
-            >
-              <i class="fa-solid fa-rotate" aria-hidden="true"></i>
-            </button>
+            @if (uploadAllowed()) {
+              <button
+                type="button"
+                class="icon-btn"
+                title="Replace image"
+                aria-label="Replace image"
+                [disabled]="disabled()"
+                (click)="browse()"
+              >
+                <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+              </button>
+            }
             @if (cameraSupported()) {
               <button
                 type="button"
@@ -104,16 +117,21 @@ import { CameraDialog, CameraResult } from './camera-dialog';
           [class.is-avatar]="shape() === 'avatar'"
           [class.has-error]="!!message()"
           [disabled]="disabled()"
-          (click)="browse()"
+          (click)="cameraOnly() ? openCamera() : browse()"
         >
           <span class="zone-icon">
-            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+            <i
+              [class]="cameraOnly() ? 'fa-solid fa-camera' : 'fa-solid fa-cloud-arrow-up'"
+              aria-hidden="true"
+            ></i>
           </span>
-          <span class="zone-title">{{ placeholder() }}</span>
-          <span class="zone-sub">{{ acceptLabel() }} · up to {{ maxSizeMb() }} MB</span>
+          <span class="zone-title">{{ resolvedPlaceholder() }}</span>
+          <span class="zone-sub">{{ zoneSub() }}</span>
         </button>
 
-        @if (cameraSupported()) {
+        <!-- Only a secondary route to the camera — when the zone itself is the
+             camera there is nothing left for it to offer. -->
+        @if (cameraSupported() && !cameraOnly()) {
           <!-- Outside the zone button: nesting interactive elements would break
                keyboard and screen-reader semantics. -->
           <button
@@ -407,21 +425,21 @@ export class ImagePicker {
   readonly maxSizeMb = input(5);
   readonly disabled = input(false);
   readonly required = input(false);
-  readonly placeholder = input('Click to upload, or drop an image here');
+  /** Overrides the wording in the empty zone; defaults per {@link sources}. */
+  readonly placeholder = input('');
   /** Parent-supplied error (e.g. "photo required" from form validation). */
   readonly error = input('');
   /** Already-stored image to show until the user picks a new one. */
   readonly existingUrl = input<string | null>(null);
   /** `avatar` renders a circular 132px well; `wide` a full-width drop zone. */
   readonly shape = input<'wide' | 'avatar'>('wide');
-  /** Set false to hide the camera path even where it is supported. */
-  readonly allowCamera = input(true);
+  /** Which input routes to offer: file, camera, or both (the default). */
+  readonly sources = input<ImageSource>('both');
 
   /** Emits the chosen file, or null when cleared. */
   readonly fileChange = output<File | null>();
 
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
-  private readonly video = viewChild<ElementRef<HTMLVideoElement>>('video');
 
   protected readonly inputId = `fb-image-${nextId++}`;
 
@@ -437,7 +455,36 @@ export class ImagePicker {
    * so the camera path is offered only where it can actually work.
    */
   protected readonly cameraSupported = computed(
-    () => this.allowCamera() && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
+    () =>
+      this.sources() !== 'upload' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia,
+  );
+
+  /** The camera is the only route — so the empty zone opens it directly. */
+  protected readonly cameraOnly = computed(
+    () => this.sources() === 'camera' && this.cameraSupported(),
+  );
+
+  /**
+   * File picking stays available whenever it was asked for, and also when
+   * `camera` was asked for but this browser can't deliver one — better a
+   * fallback than a field nothing can fill.
+   */
+  protected readonly uploadAllowed = computed(() => !this.cameraOnly());
+
+  protected readonly resolvedPlaceholder = computed(() => {
+    const supplied = this.placeholder();
+    if (supplied) {
+      return supplied;
+    }
+    return this.cameraOnly() ? 'Take a photo' : 'Click to upload, or drop an image here';
+  });
+
+  protected readonly zoneSub = computed(() =>
+    this.cameraOnly()
+      ? 'Uses your device camera'
+      : `${this.acceptLabel()} · up to ${this.maxSizeMb()} MB`,
   );
 
   protected readonly previewSrc = computed(() => this.objectUrl() ?? this.existingUrl());
@@ -477,6 +524,11 @@ export class ImagePicker {
 
   }
 
+  /**
+   * Not gated on {@link uploadAllowed}: the template hides every entry point in
+   * camera-only mode, but the camera dialog's own "choose a file instead"
+   * fallback still needs a way through when the device refuses the camera.
+   */
   protected browse(): void {
     this.fileInput()?.nativeElement.click();
   }
@@ -492,7 +544,7 @@ export class ImagePicker {
   }
 
   protected onDragOver(event: DragEvent): void {
-    if (this.disabled()) {
+    if (this.disabled() || !this.uploadAllowed()) {
       return;
     }
     event.preventDefault();
@@ -507,7 +559,7 @@ export class ImagePicker {
   protected onDrop(event: DragEvent): void {
     event.preventDefault();
     this.dragging.set(false);
-    if (this.disabled()) {
+    if (this.disabled() || !this.uploadAllowed()) {
       return;
     }
     const file = event.dataTransfer?.files?.[0];
@@ -614,9 +666,4 @@ function formatBytes(bytes: number): string {
   }
   const kb = bytes / 1024;
   return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
-}
-
-/** Filename-safe timestamp, so captures don't all collide on one name. */
-function stamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 }

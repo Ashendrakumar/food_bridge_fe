@@ -459,8 +459,7 @@ export class Nearby {
       },
       content: ClaimDialog,
       data: { pickupDeadlineUtc: row.source.pickupDeadlineUtc },
-      // md, not sm: the datetime picker opens a calendar beside a time column, and
-      // allowOverflow so that panel isn't clipped by the dialog body.
+      // allowOverflow so the select's panel isn't clipped by the dialog body.
       size: 'md',
       allowOverflow: true,
       actions: [
@@ -584,6 +583,11 @@ export class Nearby {
       stops,
       contacts,
       note: this.routeNote(stops.length > 2, !!recipientName),
+      // Fallbacks for when Google can't return directions: measure from the
+      // volunteer if we know where they are, else use the distance the feed
+      // already returned for this listing.
+      originIsUserLocation: this.locationSource() !== 'default',
+      serverDistanceKm: row.source.distanceKm,
     });
   }
 

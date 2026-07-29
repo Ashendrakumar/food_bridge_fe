@@ -36,10 +36,49 @@ export interface RouteDialogData {
   /** Small caveat line under the contacts, e.g. why a leg is missing. */
   note?: string;
   contacts?: RouteContact[];
+  /**
+   * Distance the API already worked out for this listing, in km. Shown when the
+   * panel can't measure from the user itself — see {@link originIsUserLocation}.
+   */
+  serverDistanceKm?: number | null;
+  /**
+   * Whether the first stop really is where the user is. Pages that fall back to
+   * a default map centre pass `false`, so the panel doesn't present a distance
+   * measured from an arbitrary point as "from you" — it uses
+   * {@link serverDistanceKm} instead. Defaults to true.
+   */
+  originIsUserLocation?: boolean;
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 const MAP_HEIGHT = 400;
+const EARTH_RADIUS_KM = 6371;
+
+/**
+ * Great-circle distance between two points, in km, or null if either point
+ * isn't a usable coordinate.
+ *
+ * Directions are the real answer, but they need Google to actually respond —
+ * an expired key, a billing problem or an offline dev box all leave the panel
+ * with nothing to show. This needs neither the network nor the SDK.
+ */
+function haversineKm(a: FbLatLng, b: FbLatLng): number | null {
+  if (![a?.lat, a?.lng, b?.lat, b?.lng].every((n) => Number.isFinite(n))) {
+    return null;
+  }
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Metres below a kilometre, one decimal above — the way Google phrases it. */
+function formatKm(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
 
 /**
  * Body of the route-preview dialog — a multi-stop journey (you → pickup → drop-off).
@@ -60,10 +99,8 @@ const MAP_HEIGHT = 400;
 
       <div class="rd-side">
         <div class="rd-total">
-          <div class="rd-total-num">{{ summary()?.distanceText ?? '—' }}</div>
-          <div class="rd-total-label">
-            total · {{ summary()?.durationText ?? 'calculating…' }} by {{ travelModeLabel() }}
-          </div>
+          <div class="rd-total-num">{{ total().value }}</div>
+          <div class="rd-total-label">{{ total().label }}</div>
         </div>
 
         <ol class="rd-stops">
@@ -214,6 +251,62 @@ export class RoutePanel {
     (this.data.travelMode ?? 'DRIVING').toLowerCase(),
   );
 
+  /**
+   * Straight-line km for every hop of the journey, measured from where the user
+   * actually is. Empty when the origin is a stand-in for their position, or when
+   * a stop has no usable coordinate — in both cases measuring from it would be a
+   * fiction, so the caller's server distance answers instead.
+   */
+  private readonly estimatedLegsKm = computed<readonly number[]>(() => {
+    if (this.data.originIsUserLocation === false) {
+      return [];
+    }
+    const stops = this.data.stops;
+    const hops: number[] = [];
+    for (let i = 1; i < stops.length; i++) {
+      const km = haversineKm(stops[i - 1].at, stops[i].at);
+      if (km === null) {
+        return [];
+      }
+      hops.push(km);
+    }
+    return hops;
+  });
+
+  /**
+   * The headline distance, in the order the user can trust it: what Google
+   * actually routed, else the straight line from their own position, else
+   * whatever the API measured for this listing. Only when all three are missing
+   * does it fall back to a dash.
+   */
+  protected readonly total = computed<{ value: string; label: string }>(() => {
+    const routed = this.summary();
+    if (routed) {
+      return {
+        value: routed.distanceText,
+        label: `total · ${routed.durationText} by ${this.travelModeLabel()}`,
+      };
+    }
+
+    const estimated = this.estimatedLegsKm();
+    if (estimated.length) {
+      return {
+        value: `≈ ${formatKm(estimated.reduce((sum, km) => sum + km, 0))}`,
+        label: 'straight line from your location · road distance will be longer',
+      };
+    }
+
+    const fromServer = this.data.serverDistanceKm;
+    if (fromServer != null && Number.isFinite(fromServer)) {
+      return {
+        value: `≈ ${formatKm(fromServer)}`,
+        label: 'straight line, as measured for this listing',
+      };
+    }
+
+    return { value: '—', label: `total · calculating… by ${this.travelModeLabel()}` };
+  });
+
   protected readonly mapConfig = computed<FbMapConfig>(() => {
     const stops = this.data.stops;
     return {
@@ -240,14 +333,27 @@ export class RoutePanel {
     };
   });
 
-  /** Stops decorated with their letter and the leg that *arrives* at them. */
+  /**
+   * Stops decorated with their letter and the leg that *arrives* at them —
+   * routed if Google answered, otherwise the same straight-line estimate the
+   * total is built from, so the list never goes blank while the total shows one.
+   */
   protected readonly stopViews = computed(() => {
     const legs = this.summary()?.legs ?? [];
-    return this.data.stops.map((s, i) => ({
-      ...s,
-      letter: LETTERS[i] ?? String(i + 1),
-      leg: i > 0 && legs[i - 1] ? `${legs[i - 1].distanceText} · ${legs[i - 1].durationText}` : '',
-    }));
+    const estimated = this.estimatedLegsKm();
+    return this.data.stops.map((s, i) => {
+      const routed = i > 0 ? legs[i - 1] : undefined;
+      const guess = i > 0 ? estimated[i - 1] : undefined;
+      return {
+        ...s,
+        letter: LETTERS[i] ?? String(i + 1),
+        leg: routed
+          ? `${routed.distanceText} · ${routed.durationText}`
+          : guess != null
+            ? `≈ ${formatKm(guess)}`
+            : '',
+      };
+    });
   });
 }
 

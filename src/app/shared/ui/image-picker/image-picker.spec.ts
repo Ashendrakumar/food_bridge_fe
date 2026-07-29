@@ -272,10 +272,18 @@ describe('ImagePicker', () => {
       expect(bare.nativeElement.querySelector('.cam-btn')).toBeNull();
     });
 
-    it('hides the camera path when allowCamera is false', () => {
-      fixture.componentRef.setInput('allowCamera', false);
+    it('hides the camera path when sources is upload-only', () => {
+      fixture.componentRef.setInput('sources', 'upload');
       fixture.detectChanges();
       expect(query(fixture, '.cam-btn')).toBeNull();
+    });
+
+    it('drops the secondary camera button when the zone itself is the camera', () => {
+      fixture.componentRef.setInput('sources', 'camera');
+      fixture.detectChanges();
+      // One route in, not two: the zone opens the camera directly.
+      expect(query(fixture, '.cam-btn')).toBeNull();
+      expect(query(fixture, '.zone-title')!.textContent).toContain('Take a photo');
     });
   });
 });

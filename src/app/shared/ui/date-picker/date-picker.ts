@@ -653,8 +653,8 @@ export class FbDatePicker implements ControlValueAccessor {
 
     const values = twelve
       ? Array.from({ length: 12 }, (_, i) =>
-          meridiem === 'pm' ? (i === 0 ? 12 : i + 12) : i,
-        )
+        meridiem === 'pm' ? (i === 0 ? 12 : i + 12) : i,
+      )
       : Array.from({ length: 24 }, (_, i) => i);
 
     return values.map((value) => ({

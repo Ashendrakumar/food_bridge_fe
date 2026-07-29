@@ -1,16 +1,7 @@
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  ElementRef,
-  inject,
-  Injector,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, Injector, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, map, Observable, of } from 'rxjs';
+import { catchError, EMPTY, map, Observable, of, tap } from 'rxjs';
 import { APP_ROUTES } from '@core/config/app-routes';
 import { ApiListing } from '@core/models/listing-api.model';
 import { AuthService } from '@core/services/auth.service';
@@ -23,6 +14,7 @@ import { FbButton } from '@shared/ui/button/button';
 import { openRaiseDisputeDialog } from '@shared/ui/dispute-dialog/dispute-dialog';
 import { ListingCard, ListingCardData } from '@shared/ui/listing-card/listing-card';
 import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
+import { openPhotoDialog } from '@shared/ui/image-picker/photo-dialog';
 import { FbLatLng } from '@shared/ui/map/fb-map.model';
 import { openRouteDialog, RouteContact, RouteStop } from '@shared/ui/route-dialog/route-dialog';
 import { environment } from '@env/environment';
@@ -245,34 +237,28 @@ const DEFAULT_ORIGIN: FbLatLng = {
                   Remove from list
                 </app-button>
               } @else {
-                <!-- Primary action 70% / navigation 30%, same split as Nearby Listings. -->
                 <div class="action-row">
                   @if (row.stage === 'pickup') {
                     <app-button
-                      class="a-70"
                       variant="success"
                       size="sm"
                       icon="fa-solid fa-hand"
                       [block]="true"
-                      [loading]="busyId() === row.id"
                       (clicked)="start(row.id, 'pickup')"
                     >
                       Confirm pickup
                     </app-button>
                   } @else {
                     <app-button
-                      class="a-70"
                       size="sm"
                       icon="fa-solid fa-box-open"
                       [block]="true"
-                      [loading]="busyId() === row.id"
                       (clicked)="start(row.id, 'delivery')"
                     >
                       Confirm delivery
                     </app-button>
                   }
                   <app-button
-                    class="a-30"
                     variant="outline"
                     size="sm"
                     icon="fa-solid fa-diamond-turn-right"
@@ -313,21 +299,17 @@ const DEFAULT_ORIGIN: FbLatLng = {
         }
       </app-listing-grid>
 
-      <input #photoInput type="file" accept="image/jpeg,image/png" hidden (change)="onPhoto($event)" />
     </app-page-wrapper>
   `,
   styles: `
-    /* Card actions: primary 70% / navigation 30% — mirrors Nearby Listings. */
+    /* Card actions share the row evenly — neither confirming nor navigating is
+       the lesser action once a claim is in hand. */
     .action-row {
       display: flex;
       gap: 8px;
     }
-    .action-row .a-70 {
-      flex: 0 0 calc(70% - 4px);
-      min-width: 0;
-    }
-    .action-row .a-30 {
-      flex: 0 0 calc(30% - 4px);
+    .action-row > * {
+      flex: 1 1 0;
       min-width: 0;
     }
 
@@ -468,15 +450,10 @@ export class Deliveries {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
 
-  private readonly photoInput = viewChild.required<ElementRef<HTMLInputElement>>('photoInput');
-
   protected readonly stages = STAGES;
   protected readonly stage = signal<Stage>('all');
 
-  protected readonly busyId = signal<string | null>(null);
   protected readonly releasingId = signal<string | null>(null);
-  /** Which confirmation the pending photo belongs to. */
-  private pending: { id: string; action: 'pickup' | 'delivery' } | null = null;
 
   /**
    * The route origin. Deliberately NOT resolved on load: this page's data comes from
@@ -590,51 +567,54 @@ export class Deliveries {
 
   // ---- Confirmations ----
 
-  /** Buttons trigger the (shared) file picker; the upload runs once a file is chosen. */
+  /**
+   * Both confirmations need photographic proof, so both collect it the same way
+   * the donor's form does — the shared picker, in a modal. The upload is handed
+   * to the dialog rather than run after it closes: on a failed request the
+   * dialog stays open with the photo intact, so a retry doesn't mean walking
+   * back to re-shoot it.
+   */
   protected start(id: string, action: 'pickup' | 'delivery'): void {
-    this.pending = { id, action };
-    this.photoInput().nativeElement.click();
+    const isPickup = action === 'pickup';
+    openPhotoDialog(this.dialog, {
+      title: isPickup ? 'Confirm pickup' : 'Confirm delivery',
+      subtitle: 'A photo is required to confirm this step.',
+      icon: isPickup ? 'fa-solid fa-hand' : 'fa-solid fa-box-open',
+      confirmLabel: isPickup ? 'Confirm pickup' : 'Confirm delivery',
+      hint: isPickup
+        ? 'Photograph the food as you collect it.'
+        : 'Photograph the handover, so the recipient can confirm it.',
+      submit: (photo) =>
+        (isPickup
+          ? this.store.confirmPickup(id, photo)
+          : this.store.confirmDelivery(id, photo)
+        ).pipe(
+          tap((l) => this.announceConfirmed(l)),
+          catchError((err: Error) => {
+            this.toast.show(
+              'fa-solid fa-triangle-exclamation',
+              err.message || 'Could not confirm this step',
+            );
+            // Swallowed so the dialog stays open and the photo survives a retry.
+            return EMPTY;
+          }),
+        ),
+    });
   }
 
-  protected onPhoto(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    const pending = this.pending;
-    this.pending = null;
-    if (!file || !pending) {
+  /** Says what happens next, which differs by whether a recipient was matched. */
+  private announceConfirmed(listing: ApiListing): void {
+    if (listing.status === 'PickedUp') {
+      const drop = listing.suggestedDropOffLocation;
+      this.toast.show(
+        'fa-solid fa-circle-check',
+        drop
+          ? `Pickup confirmed — no recipient available, take it to ${drop.name}`
+          : 'Pickup confirmed — deliver to the matched recipient',
+      );
       return;
     }
-
-    this.busyId.set(pending.id);
-    const request$ =
-      pending.action === 'pickup'
-        ? this.store.confirmPickup(pending.id, file)
-        : this.store.confirmDelivery(pending.id, file);
-
-    request$.subscribe({
-      next: (l) => {
-        this.busyId.set(null);
-        if (l.status === 'PickedUp') {
-          const drop = l.suggestedDropOffLocation;
-          this.toast.show(
-            'fa-solid fa-circle-check',
-            drop
-              ? `Pickup confirmed — no recipient available, take it to ${drop.name}`
-              : 'Pickup confirmed — deliver to the matched recipient',
-          );
-        } else {
-          this.toast.show('fa-solid fa-circle-check', 'Delivery confirmed — thank you!');
-        }
-      },
-      error: (err: Error) => {
-        this.busyId.set(null);
-        this.toast.show(
-          'fa-solid fa-triangle-exclamation',
-          err.message || 'Could not confirm this step',
-        );
-      },
-    });
+    this.toast.show('fa-solid fa-circle-check', 'Delivery confirmed — thank you!');
   }
 
   /** Hand a claim back (Claimed → Pending) so another volunteer can take it. */
@@ -737,6 +717,9 @@ export class Deliveries {
       stops,
       contacts: this.contactsFor(row.source),
       note: this.routeNote(row, stops.length > 2),
+      // `ListingResponse` carries no distance, so a straight line from the
+      // resolved origin is the only fallback available here.
+      originIsUserLocation: this.originSource() !== 'default',
     });
   }
 

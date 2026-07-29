@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { APP_ROUTES } from '@core/config/app-routes';
 import { AuthService } from '@core/services/auth.service';
 import { PickupAddressService } from '@core/services/pickup-address.service';
@@ -13,7 +13,7 @@ import { NotificationBell } from '../notification-bell/notification-bell';
 
 @Component({
   selector: 'app-topbar',
-  imports: [RoleBadge, Avatar, NotificationBell, AvailabilityToggle],
+  imports: [RouterLink, RoleBadge, Avatar, NotificationBell, AvailabilityToggle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './topbar.html',
   styles: `
@@ -83,6 +83,33 @@ import { NotificationBell } from '../notification-bell/notification-bell';
     .addr-item a,
     a.addr-item {
       text-decoration: none;
+    }
+    /* Reads as a link, not another row of the list: no fill on hover, and the
+       underline is the usual cue that this one leaves the panel. */
+    .addr-add {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--fb-primary-deep);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .addr-add:hover {
+      color: var(--fb-primary);
+      text-decoration: underline;
+    }
+    .addr-add:focus-visible {
+      outline: none;
+      box-shadow: var(--fb-ring);
+      border-radius: 8px;
+    }
+    .addr-add .ext {
+      font-size: 10px;
+      opacity: 0.75;
     }
     .search-box input {
       border-radius: 12px;
@@ -177,11 +204,8 @@ export class Topbar {
     this.addrOpen.set(false);
   }
 
-  /** Manage addresses on the Profile page. */
-  protected goToAddAddress(): void {
-    this.addrOpen.set(false);
-    this.router.navigate([APP_ROUTES.appView('profile')]);
-  }
+  /** Addresses are managed on the Profile page, opened in its own tab. */
+  protected readonly profileLink = APP_ROUTES.appView('profile');
 
   protected closeMenus(): void {
     this.notifOpen.set(false);
