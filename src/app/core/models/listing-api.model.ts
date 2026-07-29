@@ -1,3 +1,4 @@
+import { DropOffLocation } from './dropoff-location.model';
 import { ListingStatus } from './listing.model';
 
 /**
@@ -33,18 +34,6 @@ export interface ApiListingTimelineEntry {
   actorUserId: string;
   note: string | null;
   photoUrl: string | null;
-  createdAtUtc: string;
-}
-
-/** A fallback drop-off point — `DropOffLocationResponse`. Populated on `suggestedDropOffLocation`. */
-export interface DropOffLocation {
-  id: string;
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  city: string | null;
-  isActive: boolean;
   createdAtUtc: string;
 }
 

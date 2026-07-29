@@ -2,12 +2,15 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_ENDPOINTS } from '@core/config/api-endpoints';
 import { ApiService, QueryParams } from '@core/http/api.service';
-import { AdminAccount, AdminDashboard } from '@core/models/admin.model';
-import { Dispute, RaiseDisputeBody } from '@core/models/dispute.model';
-import { ApiListingSummary } from '@core/models/listing-api.model';
+import { AdminAccount, AdminDashboard, AdminListingSummary } from '@core/models/admin.model';
 import { PlatformReport } from '@core/models/report.model';
 
-/** Admin console endpoints (Phase 9): dashboard, moderation, disputes, platform report. */
+/**
+ * Admin console endpoints (Phase 9): dashboard, moderation, platform report.
+ *
+ * Disputes live in `DisputeService` — raising one is open to any party on a
+ * listing, so it must not require injecting the admin console.
+ */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private readonly api = inject(ApiService);
@@ -16,13 +19,20 @@ export class AdminService {
     return this.api.get<AdminDashboard>(API_ENDPOINTS.admin.dashboard);
   }
 
-  listings(status?: string, page = 1, pageSize = 50): Observable<ApiListingSummary[]> {
+  /** `status` is a `Listings.Status` enum name (`Pending`, `Claimed`, …). */
+  listings(status?: string, page = 1, pageSize = 50): Observable<AdminListingSummary[]> {
     const params: QueryParams = { status, page, pageSize };
-    return this.api.get<ApiListingSummary[]>(API_ENDPOINTS.admin.listings, params);
+    return this.api.get<AdminListingSummary[]>(API_ENDPOINTS.admin.listings, params);
   }
 
-  accounts(role?: string, page = 1, pageSize = 50): Observable<AdminAccount[]> {
-    const params: QueryParams = { role, page, pageSize };
+  /** Both filters are server-side: `role` (`Donor`…) and `accountStatus` (`Pending`…). */
+  accounts(
+    role?: string,
+    accountStatus?: string,
+    page = 1,
+    pageSize = 50,
+  ): Observable<AdminAccount[]> {
+    const params: QueryParams = { role, accountStatus, page, pageSize };
     return this.api.get<AdminAccount[]>(API_ENDPOINTS.admin.accounts, params);
   }
 
@@ -34,20 +44,11 @@ export class AdminService {
     return this.api.patch<AdminAccount>(API_ENDPOINTS.admin.suspendAccount(id));
   }
 
-  disputes(page = 1, pageSize = 50): Observable<Dispute[]> {
-    const params: QueryParams = { page, pageSize };
-    return this.api.get<Dispute[]>(API_ENDPOINTS.disputes.base, params);
-  }
-
-  /** Raise a dispute (any party on the listing; not admin-only). */
-  raiseDispute(body: RaiseDisputeBody): Observable<Dispute> {
-    return this.api.post<Dispute>(API_ENDPOINTS.disputes.base, body);
-  }
-
-  resolveDispute(id: string, resolutionNote: string): Observable<Dispute> {
-    return this.api.patch<Dispute>(API_ENDPOINTS.disputes.resolve(id), { resolutionNote });
-  }
-
+  /**
+   * Platform-wide impact report. The one caller is the admin Reports page —
+   * `ReportService` covers the three per-role reports only, so this doesn't
+   * duplicate it.
+   */
   platformReport(): Observable<PlatformReport> {
     return this.api.get<PlatformReport>(API_ENDPOINTS.reports.platform);
   }

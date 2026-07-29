@@ -11,15 +11,27 @@ import { NotificationApiService } from './notification-api.service';
 /** Rows fetched per request — also the "is there another page?" probe size. */
 const PAGE_SIZE = 20;
 
+/**
+ * How many unread rows "Mark all read" will enumerate in one go. Deliberately far
+ * above a realistic inbox: the paged envelope's `TotalCount` is dropped by the API
+ * interceptor, so there is no cheap way to ask "how many unread are there?" — one
+ * generous page is the pragmatic answer. Anything beyond this stays unread and is
+ * caught by the next press.
+ */
+const MARK_ALL_PAGE_SIZE = 200;
+
 /** A locally pushed notification has no server row to PATCH. */
 const LOCAL_ID_PREFIX = 'local-';
 
 /**
  * In-app notification state, shared by the topbar bell and the notifications
  * inbox page. Hydrates from the REST API (`GET /api/notifications`) whenever a
- * user is signed in; `push` adds a local client-side event (e.g. an optimistic
- * toast mirror). Live SignalR push is a follow-up — this is the REST-backed
- * baseline.
+ * user is signed in; `receive` accepts live pushes from `NotificationsHub` (see
+ * `NotificationsHubService`); `push` adds a local client-side event (e.g. an
+ * optimistic toast mirror).
+ *
+ * REST stays the source of truth for the *initial* list — the hub only ever
+ * delivers rows created while connected, so a page load still needs the fetch.
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -117,27 +129,65 @@ export class NotificationService {
     });
   }
 
-  /** Mark every currently held unread notification read. */
+  /**
+   * Mark everything unread as read — including rows not yet paged in.
+   *
+   * The list held client-side is only as deep as the user has scrolled, so marking
+   * just those left older unread rows behind and the badge popped back up on the
+   * next load. This asks the server for the unread set first (`?isRead=false`),
+   * unions it with what's held, and PATCHes the lot.
+   */
   markAllRead(): void {
-    const unread = this.notifications().filter((n) => !n.isRead);
-    if (!unread.length || this.marking()) {
+    if (this.marking()) {
+      return;
+    }
+    const heldUnread = this.notifications().filter((n) => !n.isRead);
+    if (!heldUnread.length) {
       return;
     }
 
-    const ids = unread.map((n) => n.id);
-    const remoteIds = ids.filter((id) => !isLocal(id));
-    if (!remoteIds.length) {
-      this.applyRead(ids);
-      return;
-    }
-
+    const localIds = heldUnread.map((n) => n.id).filter(isLocal);
     this.marking.set(true);
+
+    this.api.list(false, 1, MARK_ALL_PAGE_SIZE).subscribe({
+      next: (unread) => this.markRemote(unionIds(heldUnread, unread), localIds),
+      // Server-side enumeration failed — still clear what's on screen rather than
+      // leaving the button doing nothing.
+      error: () => this.markRemote(heldUnread.map((n) => n.id).filter((id) => !isLocal(id)), localIds),
+    });
+  }
+
+  private markRemote(remoteIds: readonly string[], localIds: readonly string[]): void {
+    if (!remoteIds.length) {
+      this.applyRead(localIds);
+      this.marking.set(false);
+      return;
+    }
     this.api.markManyRead(remoteIds).subscribe({
       next: () => {
-        this.applyRead(ids);
+        this.applyRead([...remoteIds, ...localIds]);
         this.marking.set(false);
       },
       error: () => this.marking.set(false),
+    });
+  }
+
+  /**
+   * Accept a notification pushed live over `NotificationsHub` (`ReceiveNotification`).
+   *
+   * Idempotent by id: a reconnect can replay a row the REST hydrate already holds,
+   * and the server is the authority on read state, so an existing row is *updated*
+   * rather than duplicated or prepended twice.
+   */
+  receive(notification: Notification): void {
+    this.notifications.update((list) => {
+      const index = list.findIndex((n) => n.id === notification.id);
+      if (index === -1) {
+        return sortByNewest([notification, ...list]);
+      }
+      const next = [...list];
+      next[index] = notification;
+      return next;
     });
   }
 
@@ -173,6 +223,20 @@ export class NotificationService {
 
 function isLocal(id: string): boolean {
   return id.startsWith(LOCAL_ID_PREFIX);
+}
+
+/** Server-side ids ∪ held ids, minus local-only rows (they have nothing to PATCH). */
+function unionIds(
+  held: readonly Notification[],
+  fetched: readonly Notification[],
+): readonly string[] {
+  const ids = new Set<string>();
+  for (const n of [...held, ...fetched]) {
+    if (!isLocal(n.id)) {
+      ids.add(n.id);
+    }
+  }
+  return [...ids];
 }
 
 function sortByNewest(rows: readonly Notification[]): Notification[] {

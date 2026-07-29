@@ -121,6 +121,14 @@ export const APP_VIEWS: readonly AppView[] = [
     load: () => import('@features/admin/disputes/disputes').then((m) => m.Disputes),
   },
   {
+    id: 'dropoffLocations',
+    title: 'Drop-off Points',
+    icon: 'fa-solid fa-box-open',
+    roles: ['admin'],
+    load: () =>
+      import('@features/admin/dropoff-locations/dropoff-locations').then((m) => m.DropOffLocations),
+  },
+  {
     id: 'adminReports',
     title: 'Reports',
     icon: 'fa-solid fa-chart-column',

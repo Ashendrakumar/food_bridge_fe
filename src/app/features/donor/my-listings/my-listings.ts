@@ -1,14 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, Injector, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, EMPTY, tap } from 'rxjs';
 import { APP_ROUTES, fromView } from '@core/config/app-routes';
-import { ApiListingSummary, toListingStatus } from '@core/models/listing-api.model';
+import {
+  ApiListingStatus,
+  ApiListingSummary,
+  DIET_LABELS,
+  DietType,
+  MealType,
+  toListingStatus,
+} from '@core/models/listing-api.model';
 import { ListingStatus, STATUS_ICONS, STATUS_LABELS } from '@core/models/listing.model';
 import { DialogService } from '@core/services/dialog.service';
 import { ListingService } from '@core/services/listing.service';
 import { ToastService } from '@core/services/toast.service';
 import { InfiniteScroll } from '@shared/directives/infinite-scroll.directive';
 import { FbButton } from '@shared/ui/button/button';
+import { openRaiseDisputeDialog } from '@shared/ui/dispute-dialog/dispute-dialog';
 import { ListingCard } from '@shared/ui/listing-card/listing-card';
 import type { DialogRef } from '@shared/ui/dialog/dialog-ref';
 import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
@@ -33,21 +41,47 @@ const PAGE_SIZE = 9;
         <app-button icon="fa-solid fa-plus" (clicked)="create()">New Donation</app-button>
       </div>
 
-      <div class="flex flex-wrap gap-2 mb-4">
+      <div class="flex flex-wrap gap-2 mb-3">
         @for (t of tabs; track t) {
-          <button [class]="'tab-pill ' + tabClass(t)" (click)="tab.set(t)">
+          <button [class]="'tab-pill ' + tabClass(t)" (click)="setTab(t)">
             <i [class]="tabIcon[t]"></i><span>{{ tabLabel[t] }}</span>
           </button>
         }
       </div>
 
+      <!-- Food filters, narrowed server-side alongside the status tab. -->
+      <div class="filter-bar mb-4">
+        <div class="filter-group">
+          <span class="small-label !mb-0">Diet</span>
+          @for (d of dietOptions; track d.id) {
+            <button
+              [class]="'chip' + (diet() === d.id ? ' on' : '')"
+              (click)="setDiet(d.id)"
+            >
+              {{ d.label }}
+            </button>
+          }
+        </div>
+        <div class="filter-group">
+          <span class="small-label !mb-0">Meal</span>
+          @for (m of mealOptions; track m.id) {
+            <button
+              [class]="'chip' + (meal() === m.id ? ' on' : '')"
+              (click)="setMeal(m.id)"
+            >
+              {{ m.label }}
+            </button>
+          }
+        </div>
+      </div>
+
       <app-listing-grid
         [loading]="loading()"
-        [empty]="!filtered().length"
+        [empty]="!listings().length"
         emptyIcon="fa-solid fa-box-open"
-        emptyText="No listings in this category yet"
+        emptyText="No listings match these filters"
       >
-        @for (l of filtered(); track l.id) {
+        @for (l of listings(); track l.id) {
           <app-listing-card [listing]="l" [clickable]="true" (cardClick)="openDetail(l)" />
         }
       </app-listing-grid>
@@ -70,6 +104,40 @@ const PAGE_SIZE = 9;
     </app-page-wrapper>
   `,
   styles: `
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 22px;
+    }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      padding: 4px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--fb-line);
+      background: transparent;
+      color: var(--fb-muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition:
+        color 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease;
+    }
+    .chip:hover {
+      color: var(--fb-primary-deep);
+      border-color: var(--fb-primary);
+    }
+    .chip.on {
+      background: var(--fb-primary);
+      border-color: var(--fb-primary);
+      color: #fff;
+    }
     .tab-pill {
       display: inline-flex;
       align-items: center;
@@ -205,6 +273,7 @@ export class MyListings {
   private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
 
   protected readonly tabs: Tab[] = [
     'all',
@@ -242,16 +311,45 @@ export class MyListings {
 
   private page = 1;
 
-  protected readonly filtered = computed(() => {
-    const tab = this.tab();
-    if (tab === 'all') {
-      return this.listings();
-    }
-    return this.listings().filter((l) => this.statusOf(l) === tab);
-  });
+  // ---- Food filters (server-side, like the volunteer's Nearby feed) ----
+  protected readonly dietOptions: readonly { id: DietType | 'all'; label: string }[] = [
+    { id: 'all', label: 'Any' },
+    { id: 'Veg', label: DIET_LABELS.Veg },
+    { id: 'NonVeg', label: DIET_LABELS.NonVeg },
+  ];
+  protected readonly mealOptions: readonly { id: MealType | 'all'; label: string }[] = [
+    { id: 'all', label: 'Any' },
+    { id: 'Breakfast', label: 'Breakfast' },
+    { id: 'Lunch', label: 'Lunch' },
+    { id: 'Dinner', label: 'Dinner' },
+    { id: 'Snacks', label: 'Snacks' },
+  ];
+  protected readonly diet = signal<DietType | 'all'>('all');
+  protected readonly meal = signal<MealType | 'all'>('all');
 
   constructor() {
     this.loadInitial();
+  }
+
+  protected setTab(t: Tab): void {
+    if (this.tab() !== t) {
+      this.tab.set(t);
+      this.loadInitial();
+    }
+  }
+
+  protected setDiet(d: DietType | 'all'): void {
+    if (this.diet() !== d) {
+      this.diet.set(d);
+      this.loadInitial();
+    }
+  }
+
+  protected setMeal(m: MealType | 'all'): void {
+    if (this.meal() !== m) {
+      this.meal.set(m);
+      this.loadInitial();
+    }
   }
 
   protected statusOf(l: ApiListingSummary): ListingStatus {
@@ -294,7 +392,39 @@ export class MyListings {
             },
             { id: 'close', label: 'Close', variant: 'ghost', close: true },
           ]
-        : [{ id: 'close', label: 'Close', variant: 'ghost', close: true }],
+        : [
+            // Only once someone else is involved: a Pending listing has no other
+            // party to dispute with, and the backend rejects it anyway.
+            ...(this.canDispute(l)
+              ? [
+                  {
+                    id: 'dispute',
+                    label: 'Report an issue',
+                    icon: 'fa-solid fa-triangle-exclamation',
+                    variant: 'outline' as const,
+                    align: 'start' as const,
+                    handler: (ref: DialogRef<void, ListingDetailDialog>) => {
+                      ref.close();
+                      this.reportIssue(l);
+                    },
+                  },
+                ]
+              : []),
+            { id: 'close', label: 'Close', variant: 'ghost', close: true },
+          ],
+    });
+  }
+
+  /** A donor can dispute any listing that actually reached a volunteer. */
+  private canDispute(l: ApiListingSummary): boolean {
+    const status = this.statusOf(l);
+    return status !== 'pending' && status !== 'cancelled' && status !== 'expired';
+  }
+
+  protected reportIssue(l: ApiListingSummary): void {
+    openRaiseDisputeDialog(this.dialog, this.injector, {
+      listingId: l.id,
+      listingTitle: l.title,
     });
   }
 
@@ -389,7 +519,33 @@ export class MyListings {
     });
   }
 
+  /**
+   * Every filter goes to the server. The status tab used to filter the *loaded*
+   * page client-side, which quietly meant a tab only ever searched the rows already
+   * scrolled into view — with paging that under-reports.
+   */
   private fetch(page: number) {
-    return this.listingService.listMine(undefined, page, PAGE_SIZE);
+    const tab = this.tab();
+    return this.listingService.listMine(
+      tab === 'all' ? undefined : TAB_TO_API_STATUS[tab],
+      page,
+      PAGE_SIZE,
+      {
+        dietType: this.diet() === 'all' ? undefined : (this.diet() as DietType),
+        mealType: this.meal() === 'all' ? undefined : (this.meal() as MealType),
+      },
+    );
   }
 }
+
+/** App lowercase status → the backend enum name `GET /listings?status=` expects. */
+const TAB_TO_API_STATUS: Record<ListingStatus, ApiListingStatus> = {
+  pending: 'Pending',
+  claimed: 'Claimed',
+  pickedup: 'PickedUp',
+  delivered: 'Delivered',
+  confirmed: 'Confirmed',
+  expired: 'Expired',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
+};

@@ -3,6 +3,10 @@ export const environment = {
   // FoodBridge .NET API — relative path proxied to http://localhost:5101 by the
   // Angular dev server (see proxy.conf.json). Keeps API calls same-origin (no CORS).
   apiUrl: '/api',
+  // SignalR hub root. NOT under apiUrl — the backend maps the hubs at the origin
+  // root (`app.MapHub<…>("/hubs/…")`), so `/hubs` gets its own proxy entry with
+  // `"ws": true` for the WebSocket upgrade.
+  hubUrl: '/hubs',
   // When true the auth/register flow resolves locally (no backend needed).
   useMockAuth: false,
   // Google Maps JavaScript API key.

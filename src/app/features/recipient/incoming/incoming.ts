@@ -1,14 +1,23 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  Injector,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiAvailableNearbyListing, ApiListingSummary } from '@core/models/listing-api.model';
 import { AuthService } from '@core/services/auth.service';
 import { AvailabilityService } from '@core/services/availability.service';
+import { DialogService } from '@core/services/dialog.service';
 import { GeolocationService } from '@core/services/geolocation.service';
 import { RecipientService } from '@core/services/recipient.service';
 import { RecipientStore } from '@core/services/recipient-store.service';
 import { ToastService } from '@core/services/toast.service';
 import { UserService } from '@core/services/user.service';
 import { FbButton } from '@shared/ui/button/button';
+import { openRaiseDisputeDialog } from '@shared/ui/dispute-dialog/dispute-dialog';
 import { ListingCard } from '@shared/ui/listing-card/listing-card';
 import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
 import { FbLatLng } from '@shared/ui/map/fb-map.model';
@@ -44,12 +53,19 @@ import { FbSelect } from '@shared/ui/select/select';
       >
         @for (l of incoming(); track l.id) {
           <app-listing-card [listing]="l" icon="fa-solid fa-truck" iconBg="var(--fb-orange)" [hasFooter]="true">
-            <div cardFooter class="flex gap-2.5">
-              <button class="btn-fb-outline flex-1 !py-2 !text-sm !text-red-600" [disabled]="busyId() === l.id" (click)="reject(l)">
-                <i class="fa-solid fa-xmark mr-1"></i>Reject
-              </button>
-              <button class="btn-fb flex-1 !py-2 !text-sm" [disabled]="busyId() === l.id" (click)="accept(l)">
-                <i class="fa-solid fa-check mr-1"></i>Accept
+            <div cardFooter>
+              <div class="flex gap-2.5">
+                <button class="btn-fb-outline flex-1 !py-2 !text-sm !text-red-600" [disabled]="busyId() === l.id" (click)="reject(l)">
+                  <i class="fa-solid fa-xmark mr-1"></i>Reject
+                </button>
+                <button class="btn-fb flex-1 !py-2 !text-sm" [disabled]="busyId() === l.id" (click)="accept(l)">
+                  <i class="fa-solid fa-check mr-1"></i>Accept
+                </button>
+              </div>
+              <!-- Rejecting reassigns the food; a dispute is for when something was
+                   actually wrong with it. Kept quiet so it doesn't invite misuse. -->
+              <button type="button" class="report-link" (click)="reportIssue(l.id, l.title)">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Report an issue
               </button>
             </div>
           </app-listing-card>
@@ -153,6 +169,9 @@ import { FbSelect } from '@shared/ui/select/select';
                 <button class="btn-fb w-full !py-2 !text-sm" [disabled]="busyId() === l.id" (click)="confirmReceipt(l.id)">
                   <i class="fa-solid fa-check-double mr-1"></i>{{ busyId() === l.id ? 'Confirming…' : 'Confirm Receipt' }}
                 </button>
+                <button type="button" class="report-link" (click)="reportIssue(l.id, l.title)">
+                  <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Report an issue
+                </button>
               </div>
             </app-listing-card>
           }
@@ -161,6 +180,22 @@ import { FbSelect } from '@shared/ui/select/select';
     </app-page-wrapper>
   `,
   styles: `
+    /* Deliberately quiet: always available, never competing with accept/reject. */
+    .report-link {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 4px 0 0;
+      border: 0;
+      background: none;
+      font-size: 11.5px;
+      color: var(--fb-muted);
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }
+    .report-link:hover {
+      color: #dc2626;
+    }
     .blocker {
       display: flex;
       align-items: flex-start;
@@ -193,6 +228,8 @@ export class Incoming {
   private readonly auth = inject(AuthService);
   private readonly users = inject(UserService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
+  private readonly injector = inject(Injector);
 
   protected readonly incoming = signal<ApiListingSummary[]>([]);
   protected readonly loading = signal(true);
@@ -320,6 +357,14 @@ export class Incoming {
         this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not confirm receipt');
       },
     });
+  }
+
+  /**
+   * Raise a dispute on this listing (`POST /disputes`). Distinct from Reject: that
+   * frees the food for another NGO, this flags that something was wrong with it.
+   */
+  protected reportIssue(listingId: string, listingTitle: string): void {
+    openRaiseDisputeDialog(this.dialog, this.injector, { listingId, listingTitle });
   }
 
   private load(): void {

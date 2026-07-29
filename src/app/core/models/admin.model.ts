@@ -25,7 +25,7 @@ export interface AdminDashboard {
   accountsByStatus: StatusCount[];
 }
 
-/** GET /api/admin/accounts row. */
+/** GET /api/admin/accounts row — `AdminUserSummaryResponse`. */
 export interface AdminAccount {
   id: string;
   name: string;
@@ -33,5 +33,26 @@ export interface AdminAccount {
   role: string;
   city: string | null;
   accountStatus: string;
+  isAvailable: boolean;
+  createdAtUtc: string;
+}
+
+/**
+ * GET /api/admin/listings row — `AdminListingSummaryResponse`.
+ *
+ * Deliberately *not* `ApiListingSummary`: the admin view trades the food detail
+ * (diet/meal/freshness) for the parties on the listing. Only the donor is named —
+ * volunteer and recipient come back as ids, so the table shows presence, not names.
+ */
+export interface AdminListingSummary {
+  id: string;
+  title: string;
+  status: string;
+  donorId: string;
+  donorName: string;
+  volunteerId: string | null;
+  recipientId: string | null;
+  quantityMeals: number;
+  pickupDeadlineUtc: string;
   createdAtUtc: string;
 }

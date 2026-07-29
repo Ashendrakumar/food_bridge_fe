@@ -26,12 +26,11 @@ export interface RecipientReport {
   mealsReceivedByMonth: ChartPoint[];
 }
 
-/** GET /api/reports/platform (admin). */
+/** GET /api/reports/platform (admin) — `PlatformReportResponse`. */
 export interface PlatformReport {
   totalMealsDonated: number;
-  totalListings: number;
-  totalDonors: number;
-  totalVolunteers: number;
-  totalRecipients: number;
-  mealsByMonth: ChartPoint[];
+  totalDeliveries: number;
+  totalCertificates: number;
+  totalUsers: number;
+  mealsDonatedByMonth: ChartPoint[];
 }

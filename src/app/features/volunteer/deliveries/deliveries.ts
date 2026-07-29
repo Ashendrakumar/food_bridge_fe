@@ -5,6 +5,7 @@ import {
   computed,
   ElementRef,
   inject,
+  Injector,
   signal,
   viewChild,
 } from '@angular/core';
@@ -19,6 +20,7 @@ import { ToastService } from '@core/services/toast.service';
 import { UserService } from '@core/services/user.service';
 import { VolunteerDeliveriesStore } from '@core/services/volunteer-deliveries.store';
 import { FbButton } from '@shared/ui/button/button';
+import { openRaiseDisputeDialog } from '@shared/ui/dispute-dialog/dispute-dialog';
 import { ListingCard, ListingCardData } from '@shared/ui/listing-card/listing-card';
 import { ListingGrid } from '@shared/ui/listing-grid/listing-grid';
 import { FbLatLng } from '@shared/ui/map/fb-map.model';
@@ -300,6 +302,12 @@ const DEFAULT_ORIGIN: FbLatLng = {
                   </app-button>
                 }
               }
+
+              <!-- Open to any party on the listing, at any stage: the problem worth
+                   reporting (missing food, nobody at the door) usually surfaces here. -->
+              <button type="button" class="report-link" (click)="reportIssue(row)">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Report an issue
+              </button>
             </div>
           </app-listing-card>
         }
@@ -419,6 +427,22 @@ const DEFAULT_ORIGIN: FbLatLng = {
     .photo-note + app-button {
       margin-top: 8px;
     }
+    /* Deliberately quiet: always available, never competing with the stage action. */
+    .report-link {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 4px 0 0;
+      border: 0;
+      background: none;
+      font-size: 11.5px;
+      color: var(--fb-muted);
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }
+    .report-link:hover {
+      color: #dc2626;
+    }
 
     .done-note {
       display: flex;
@@ -442,6 +466,7 @@ export class Deliveries {
   private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
 
   private readonly photoInput = viewChild.required<ElementRef<HTMLInputElement>>('photoInput');
 
@@ -644,6 +669,14 @@ export class Deliveries {
   /** Drop a finished delivery from this list — it stays on the History page. */
   protected clear(row: DeliveryRow): void {
     this.store.drop(row.id);
+  }
+
+  /** Raise a dispute on this delivery (`POST /disputes`; open to any party on it). */
+  protected reportIssue(row: DeliveryRow): void {
+    openRaiseDisputeDialog(this.dialog, this.injector, {
+      listingId: row.id,
+      listingTitle: row.source.title,
+    });
   }
 
   // ---- Route preview ----

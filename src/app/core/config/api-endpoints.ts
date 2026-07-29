@@ -65,12 +65,16 @@ export const API_ENDPOINTS = {
     recipient: 'dashboard/recipient',
   },
 
-  // Admin-managed fallback drop-off locations (surfaces via suggestedDropOffLocation)
+  // Admin-managed fallback drop-off locations (surfaces via suggestedDropOffLocation).
+  // No DELETE server-side — retire a location with `deactivate` instead.
   dropoffLocations: {
     base: 'dropoff-locations',
     activate: (id: Id) => `dropoff-locations/${id}/activate`,
     deactivate: (id: Id) => `dropoff-locations/${id}/deactivate`,
   },
+
+  // Liveness probe — anonymous, no envelope data worth reading beyond the 200.
+  health: 'health',
 
   // 7. Notifications (REST fallback for NotificationsHub) + geocode
   notifications: {

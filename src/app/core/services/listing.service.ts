@@ -18,11 +18,17 @@ export interface ImageUploadResult {
   imageUrl: string;
 }
 
-/** Optional server-side narrowing for GET /listings/nearby. */
-export interface NearbyFilters {
+/**
+ * Optional server-side narrowing by food attributes. Accepted by both
+ * `GET /listings` (donor's own) and `GET /listings/nearby` (volunteer feed).
+ */
+export interface FoodFilters {
   dietType?: DietType;
   mealType?: MealType;
 }
+
+/** @deprecated Use {@link FoodFilters} — kept as an alias for existing callers. */
+export type NearbyFilters = FoodFilters;
 
 /**
  * HTTP client for the Donor (Phase 4) and Volunteer (Phase 5) listing endpoints.
@@ -39,9 +45,24 @@ export class ListingService {
     return this.api.post<ApiListing>(API_ENDPOINTS.listings.base, body);
   }
 
-  /** The caller's own listings, optionally filtered by status. */
-  listMine(status?: ApiListingStatus, page = 1, pageSize = 50): Observable<ApiListingSummary[]> {
-    const params: QueryParams = { page, pageSize, status };
+  /**
+   * The caller's own listings. `status` and the `filters` food attributes all
+   * narrow **server-side** — the endpoint accepts `dietType`/`mealType` too, and
+   * filtering a paged list locally would only ever search the current page.
+   */
+  listMine(
+    status?: ApiListingStatus,
+    page = 1,
+    pageSize = 50,
+    filters?: FoodFilters,
+  ): Observable<ApiListingSummary[]> {
+    const params: QueryParams = {
+      page,
+      pageSize,
+      status,
+      dietType: filters?.dietType,
+      mealType: filters?.mealType,
+    };
     return this.api.get<ApiListingSummary[]>(API_ENDPOINTS.listings.base, params);
   }
 

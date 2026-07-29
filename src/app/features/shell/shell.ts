@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { LocationBroadcastService } from '@core/realtime/location-broadcast.service';
 import { LayoutService } from '@core/services/layout.service';
 import { Sidebar } from './sidebar/sidebar';
 import { Topbar } from './topbar/topbar';
@@ -48,4 +49,13 @@ import { Topbar } from './topbar/topbar';
 })
 export class Shell {
   protected readonly layout = inject(LayoutService);
+
+  /**
+   * Instantiated for its side effect: while a volunteer has a delivery in transit
+   * it streams their position to `TrackingHub`. It lives here rather than on the
+   * Deliveries page so broadcasting survives navigation — a volunteer checking the
+   * leaderboard mid-delivery shouldn't drop off the recipient's map. It self-gates
+   * on `inTransit()`, so for every other role it does nothing.
+   */
+  private readonly locationBroadcast = inject(LocationBroadcastService);
 }

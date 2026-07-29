@@ -27,13 +27,14 @@ src/app/
 │   ├── guards/              → authGuard, roleGuard
 │   ├── http/                → api.service (HttpClient wrapper), base-crud.service, api.interceptor
 │   ├── models/              → typed DTOs / view models
+│   ├── realtime/            → SignalR: hub-connection (builder), notifications-hub, tracking-hub, location-broadcast
 │   └── services/            → feature/data services + signal stores
 ├── features/                → one folder per screen (lazy-loaded standalone components)
 │   ├── auth/                → auth-layout, login, otp, register
 │   ├── donor/               → create-listing, my-listings, certificates
 │   ├── volunteer/           → nearby, deliveries, leaderboard
 │   ├── recipient/           → incoming, track, reports
-│   ├── admin/               → all-listings, verifications, disputes, admin-reports
+│   ├── admin/               → all-listings, verifications, disputes, dropoff-locations, admin-reports
 │   ├── shell/               → shell, sidebar, topbar, coming-soon
 │   ├── dashboard, history, profile, settings
 ├── shared/ui/               → reusable presentational components (page-wrapper, listing-card, listing-grid, status-badge, deadline-meter, avatar, role-badge, success-anim, button, input, select, date-picker, map, toast, dialog, rescue-timeline, empty-state, bar-chart, route-map, route-dialog, notification-item, notification-filters)
@@ -62,6 +63,32 @@ Every backend response uses the `ApiResponse<T>` / `PagedResponse<T>` envelope
 
 1. **`authTokenInterceptor`** — attaches `Authorization: Bearer <jwt>` to requests whose URL starts with `environment.apiUrl`. Token is read from `localStorage` (`foodbridge.token`).
 2. **`apiEnvelopeInterceptor`** — unwraps the envelope so callers receive the inner `data` directly, and converts error responses into an `Error` carrying the server's `message` (falling back to the first field error, then a generic message). This is why services type their returns as the inner payload, and lists return the `data` array directly.
+
+## Real-time (`core/realtime/`)
+Two SignalR hubs, one shared connection builder. See ROUTES.md for the method names.
+
+```
+Component / Service
+    → NotificationsHubService | TrackingHubService     (root singletons)
+        → buildHubConnection(path, () => auth.token())  (accessTokenFactory + reconnect)
+            → /hubs/{notifications,tracking}            (origin root, proxied with "ws": true)
+```
+
+Three things are load-bearing and easy to break:
+- **The hub URL is not under `environment.apiUrl`.** The backend maps hubs at `/hubs/…`;
+  `/api` is a sibling. `environment.hubUrl` exists for exactly this, and `/hubs` needs its own
+  `proxy.conf.json` entry with `"ws": true` or the upgrade never reaches the API.
+- **Auth is via `accessTokenFactory`, not a header.** Both hubs are `[Authorize]` and the
+  WebSocket transport cannot set `Authorization`, so SignalR appends `?access_token=`. The
+  backend honours that only for `/hubs` paths (`JwtBearerEvents.OnMessageReceived`).
+- **`LocationBroadcastService` is the only writer to the backend's tracking store.**
+  `GET /listings/{id}/track` reads an in-memory store that only `TrackingHub.UpdateLocation`
+  fills. It is mounted on `Shell` (not the Deliveries page) so a volunteer stays on the map
+  while browsing, and self-gates on `inTransit()` so no other role opens a socket.
+
+Live push **augments** REST, never replaces it: a hub only carries rows created while
+connected, so `NotificationService` still hydrates over HTTP and refetches on reconnect.
+A failed handshake is therefore a silent degradation, not a user-facing error.
 
 ## Auth & session
 - OTP-based, matching the backend: `send-otp → verify-otp → (register if new) → JWT`.
@@ -244,7 +271,12 @@ style block inside the 4kB `anyComponentStyle` budget.
 - **`proxy.conf.json`** routes `/api` and `/uploads` to the backend, so the browser sees everything same-origin — no CORS needed, and `environment.apiUrl` is the relative `/api`.
 
 ## Decisions log
-- **Additive integration.** Real backend wiring (Auth, Profile, Donor listings, Volunteer listings) was added alongside the existing mock `ListingStore` rather than replacing it, so pages whose backend isn't built yet (recipient, dashboard, history, certificates, admin) keep working on mock data.
+- **Additive integration, now complete.** Real backend wiring was originally added alongside the mock `ListingStore` so unbuilt pages kept working. Every page is now on the real API; `ListingStore`/`mock-data.ts` are no longer read by any screen and can be deleted once nothing imports them.
+- **Filter on the server, not the client.** The envelope interceptor drops `TotalCount`, so a paged list only holds what has been scrolled in — filtering that locally under-reports without any visible symptom. Every status/role/diet/meal filter goes into the query string. The one deliberate exception is the notifications inbox, whose read-progress ring and category breakdown are *defined* over the whole loaded set.
+- **`DisputeService` is separate from `AdminService`.** `POST /disputes` is open to any party on a listing; only list/resolve are admin. Keeping them together forced donor/volunteer/recipient pages to inject the admin console to report a problem.
+- **Admin listings get their own model.** `GET /admin/listings` returns `AdminListingSummaryResponse`, not `ListingSummaryResponse` — it trades the food detail for the parties, and names only the donor. The table therefore shows volunteer/recipient as "Assigned" with the id on hover rather than inventing names the API never sent.
+- **The platform report shows only what the API reports.** A hardcoded "CO₂ avoided" tile was removed: there is no such measure in `PlatformReportResponse`, and a fabricated figure on a page labelled "CSR-ready" is worse than an absent one.
+- **Nominatim stays for reverse-geocoding.** `GET /api/geocode` is *forward* (address → coords) and backed by `MockGeocodingProvider`; the app needs coords → address. Switching would need a new backend action and a real provider.
 - **Listings show title + food details, not names.** The Phase 2–5 endpoints return IDs, not donor/volunteer/recipient names, so listing cards render `title` + food info.
 - **Volunteer "My Deliveries" is client-tracked, not server-read.** No "list my active deliveries" endpoint exists until backend Phase 8, and `GET /listings` is `DonorOnly`, so a volunteer's claims cannot be re-read from the API at all. `VolunteerDeliveriesStore` therefore tracks them from claim time and drives the real confirm-pickup/confirm-delivery calls. It mirrors the list into `localStorage` under `foodbridge.volunteerDeliveries.{userId}` (one bucket per account) so the page survives a reload; a claim released via `store.release()` is dropped from both. Demo/mock users without a backend `id` stay in-memory only.
 - **Dev proxy over absolute API URL.** Chosen so the app is CORS-free on any port and needs no backend change.

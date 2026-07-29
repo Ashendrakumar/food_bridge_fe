@@ -6,7 +6,13 @@ import { API_ENDPOINTS } from '@core/config/api-endpoints';
 import { ApiService, QueryParams } from '@core/http/api.service';
 import { Certificate } from '@core/models/certificate.model';
 
-/** Certificate endpoints (Phase 8): list, detail, PDF download. */
+/**
+ * Certificate endpoints (Phase 8): list + PDF download.
+ *
+ * `GET /certificates/{id}` is intentionally not wrapped: `CertificateResponse` is
+ * the same shape in the list as on its own, so a detail fetch would re-request data
+ * the page already holds. Add it back if a deep-linked certificate view appears.
+ */
 @Injectable({ providedIn: 'root' })
 export class CertificateService {
   private readonly api = inject(ApiService);
@@ -17,10 +23,6 @@ export class CertificateService {
   list(page = 1, pageSize = 50): Observable<Certificate[]> {
     const params: QueryParams = { page, pageSize };
     return this.api.get<Certificate[]>(API_ENDPOINTS.certificates.base, params);
-  }
-
-  getById(id: string): Observable<Certificate> {
-    return this.api.get<Certificate>(API_ENDPOINTS.certificates.byId(id));
   }
 
   /** Fetch the certificate PDF as a blob (auth header attached by the interceptor). */

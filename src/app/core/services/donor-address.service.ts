@@ -7,6 +7,10 @@ import { DonorAddress, DonorAddressBody } from '@core/models/donor-address.model
 /**
  * HTTP client for the Donor saved-address CRUD endpoints. Setting `isDefault`
  * on one address clears it on the others (enforced server-side).
+ *
+ * `GET /donor-addresses/{id}` is intentionally not wrapped: `PickupAddressService`
+ * works off `list()`, and every write returns the updated row, so a single-address
+ * fetch has no caller. The path stays in `API_ENDPOINTS` for when one appears.
  */
 @Injectable({ providedIn: 'root' })
 export class DonorAddressService {
@@ -15,10 +19,6 @@ export class DonorAddressService {
   list(page = 1, pageSize = 50): Observable<DonorAddress[]> {
     const params: QueryParams = { page, pageSize };
     return this.api.get<DonorAddress[]>(API_ENDPOINTS.donorAddresses.base, params);
-  }
-
-  getById(id: string): Observable<DonorAddress> {
-    return this.api.get<DonorAddress>(API_ENDPOINTS.donorAddresses.byId(id));
   }
 
   create(body: DonorAddressBody): Observable<DonorAddress> {

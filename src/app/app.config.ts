@@ -11,6 +11,7 @@ import { provideRouter, TitleStrategy, withComponentInputBinding } from '@angula
 
 import { routes } from './app.routes';
 import { GlobalErrorHandler } from '@core/errors/global-error-handler';
+import { NotificationsHubService } from '@core/realtime/notifications-hub.service';
 import { AppTitleStrategy } from '@core/services/app-title-strategy';
 import { apiEnvelopeInterceptor, authTokenInterceptor } from '@core/http/api.interceptor';
 import { AuthService } from '@core/services/auth.service';
@@ -27,6 +28,13 @@ export const appConfig: ApplicationConfig = {
     // On startup, hydrate the session from GET /auth/me so the shell renders
     // real backend data (falls through instantly when not signed in).
     provideAppInitializer(() => inject(AuthService).refreshCurrentUser()),
+    // Instantiate the notifications hub so its sign-in effect starts running.
+    // Nothing injects it otherwise — it is a listener, not a dependency — and a
+    // lazily-created root service would never connect. Returns void so startup
+    // never waits on the socket.
+    provideAppInitializer(() => {
+      inject(NotificationsHubService);
+    }),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     { provide: TitleStrategy, useClass: AppTitleStrategy },
   ],

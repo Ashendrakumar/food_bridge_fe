@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { catchError, EMPTY, tap } from 'rxjs';
 import { AuthService } from '@core/services/auth.service';
 import { AvailabilityService } from '@core/services/availability.service';
+import { DialogService } from '@core/services/dialog.service';
 import { GeocodingService } from '@core/services/geocoding.service';
 import { PickupAddress, PickupAddressService } from '@core/services/pickup-address.service';
 import { ToastService } from '@core/services/toast.service';
@@ -11,6 +13,7 @@ import { UpdateProfileBody, UserProfile } from '@core/models/user.model';
 import { AvailabilityToggle } from '@shared/ui/availability-toggle/availability-toggle';
 import { FbButton } from '@shared/ui/button/button';
 import { FbInput } from '@shared/ui/input/input';
+import { openPhotoDialog } from '@shared/ui/image-picker/photo-dialog';
 import { FbMap } from '@shared/ui/map/fb-map';
 import { FbLatLng, FbMapConfig } from '@shared/ui/map/fb-map.model';
 import { RoleBadge } from '@shared/ui/role-badge/role-badge';
@@ -43,10 +46,9 @@ const ADDR_FIELDS = ['label', 'address', 'pincode'] as const;
           <div class="id-head">
             <div class="relative shrink-0">
               <app-avatar [name]="u.name" [imageUrl]="u.avatarUrl" [size]="64" />
-              <button type="button" class="photo-btn" title="Change photo" (click)="photoInput.click()">
+              <button type="button" class="photo-btn" title="Change photo" (click)="changePhoto()">
                 <i class="fa-solid fa-camera"></i>
               </button>
-              <input #photoInput type="file" accept="image/jpeg,image/png" hidden (change)="onPhoto($event)" />
             </div>
             <div class="min-w-0 flex-1">
               <h4 class="id-name">{{ u.name }}</h4>
@@ -421,6 +423,7 @@ export class Profile {
   private readonly auth = inject(AuthService);
   private readonly users = inject(UserService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   protected readonly pickup = inject(PickupAddressService);
   protected readonly availability = inject(AvailabilityService);
   private readonly geocoding = inject(GeocodingService);
@@ -530,22 +533,33 @@ export class Profile {
     });
   }
 
-  protected onPhoto(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
+  /** Same upload-or-capture modal the pickup and delivery confirmations use. */
+  protected changePhoto(): void {
     const id = this.profile()?.id;
-    if (!file || !id) {
+    if (!id) {
       return;
     }
-    this.users.uploadAvatar(id, file).subscribe({
-      next: (res) => {
-        this.profile.update((p) => (p ? { ...p, avatarUrl: res.avatarUrl } : p));
-        this.auth.patchCurrentUser({ avatarUrl: res.avatarUrl });
-        this.toast.show('fa-solid fa-circle-check', 'Photo updated');
-      },
-      error: (err: Error) =>
-        this.toast.show('fa-solid fa-triangle-exclamation', err.message || 'Could not upload photo'),
+    openPhotoDialog(this.dialog, {
+      title: 'Change your photo',
+      icon: 'fa-solid fa-user',
+      confirmLabel: 'Save photo',
+      hint: 'Shown to donors, volunteers and NGOs you work with.',
+      submit: (photo) =>
+        this.users.uploadAvatar(id, photo).pipe(
+          tap((res) => {
+            this.profile.update((p) => (p ? { ...p, avatarUrl: res.avatarUrl } : p));
+            this.auth.patchCurrentUser({ avatarUrl: res.avatarUrl });
+            this.toast.show('fa-solid fa-circle-check', 'Photo updated');
+          }),
+          catchError((err: Error) => {
+            this.toast.show(
+              'fa-solid fa-triangle-exclamation',
+              err.message || 'Could not upload photo',
+            );
+            // Keeps the dialog open so the same photo can be retried.
+            return EMPTY;
+          }),
+        ),
     });
   }
 
