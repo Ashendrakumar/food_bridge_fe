@@ -58,11 +58,16 @@ Component (signals, forms)
 
 ## HTTP cross-cutting (mirrors the backend envelope)
 Every backend response uses the `ApiResponse<T>` / `PagedResponse<T>` envelope
-(`{ success, message, data, errors, traceId }`). Two functional interceptors in
-`core/http/api.interceptor.ts` (registered in `app.config.ts`) handle this:
+(`{ success, message, data, errors, traceId }`). Three functional interceptors in
+`core/http/api.interceptor.ts` (registered in `app.config.ts`, **in this order**) handle this:
 
 1. **`authTokenInterceptor`** — attaches `Authorization: Bearer <jwt>` to requests whose URL starts with `environment.apiUrl`. Token is read from `localStorage` (`foodbridge.token`).
-2. **`apiEnvelopeInterceptor`** — unwraps the envelope so callers receive the inner `data` directly, and converts error responses into an `Error` carrying the server's `message` (falling back to the first field error, then a generic message). This is why services type their returns as the inner payload, and lists return the `data` array directly.
+2. **`apiEnvelopeInterceptor`** — unwraps the envelope so callers receive the inner `data` directly, and converts error responses into an **`ApiError`** (`core/http/api-error.ts`) carrying the server's `message` (falling back to the first field error, then a generic message) **plus the HTTP `status`**. This is why services type their returns as the inner payload, and lists return the `data` array directly.
+3. **`sessionExpiryInterceptor`** — on a **401** from any session-bearing endpoint it calls `AuthService.clearSession()`, toasts "Your session has expired", and navigates to `/login`, then re-throws. Registered last (closest to the backend) so it inspects the raw `HttpErrorResponse` before step 2 normalises it. The anonymous auth endpoints (`send-otp`, `verify-otp`, `register`) are excluded — their 401 means "wrong OTP" and must stay a form error. A module-level `signingOut` latch keeps a burst of parallel 401s to one toast + one navigation.
+
+`ApiError` exists because a plain `Error` dropped the status, so nothing could tell an
+expired session from a validation failure. It still extends `Error`, so existing
+`err instanceof Error ? err.message : …` handling is unaffected.
 
 ## Real-time (`core/realtime/`)
 Two SignalR hubs, one shared connection builder. See ROUTES.md for the method names.
@@ -95,6 +100,7 @@ A failed handshake is therefore a silent degradation, not a user-facing error.
 - `AuthService` owns the flow: `pendingMobile`, `otpContext`, `mobileVerified`, `registrationDraft`, `registrationSessionToken` (all signals; transient flow persisted to `sessionStorage`, session + JWT to `localStorage`).
 - **New mobile:** `verify-otp` returns a short-lived registration **session token** → passed to `register`. **Existing mobile:** returns a full auth **JWT** → user signed in.
 - `authGuard` blocks the `/app` shell unless signed in; `roleGuard` enforces `route.data.roles` per view.
+- **Guards alone are not enough.** They only test the cached session snapshot, so a token that expired *server-side* still passes them — `sessionExpiryInterceptor` is what turns the resulting 401 into a sign-out + redirect. Anything that bypasses `ApiService`/`HttpClient` (e.g. a hub handshake) therefore needs to handle its own 401.
 - Dev fixed OTP: the backend uses `Otp:FixedDevelopmentCode = 123456` in Development, so any number logs in with `123456` (also printed to the backend log by `MockSmsProvider`).
 
 ## Enum & naming conventions (frontend ↔ backend)

@@ -13,7 +13,11 @@ import { routes } from './app.routes';
 import { GlobalErrorHandler } from '@core/errors/global-error-handler';
 import { NotificationsHubService } from '@core/realtime/notifications-hub.service';
 import { AppTitleStrategy } from '@core/services/app-title-strategy';
-import { apiEnvelopeInterceptor, authTokenInterceptor } from '@core/http/api.interceptor';
+import {
+  apiEnvelopeInterceptor,
+  authTokenInterceptor,
+  sessionExpiryInterceptor,
+} from '@core/http/api.interceptor';
 import { AuthService } from '@core/services/auth.service';
 
 export const appConfig: ApplicationConfig = {
@@ -23,7 +27,10 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(
       withFetch(),
-      withInterceptors([authTokenInterceptor, apiEnvelopeInterceptor]),
+      // Order matters: sessionExpiry sits closest to the backend so it inspects
+      // the raw HttpErrorResponse (status 401) before the envelope interceptor
+      // normalises it into an ApiError.
+      withInterceptors([authTokenInterceptor, apiEnvelopeInterceptor, sessionExpiryInterceptor]),
     ),
     // On startup, hydrate the session from GET /auth/me so the shell renders
     // real backend data (falls through instantly when not signed in).

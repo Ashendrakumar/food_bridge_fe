@@ -208,9 +208,12 @@ export class AuthService {
    * Refresh the session from `GET /auth/me` (called by the app initializer on
    * startup). Populates `currentUser` with live backend data so the shell
    * (topbar/sidebar) and guards work off the real profile, not just the cached
-   * snapshot. No-ops in mock mode or when there's no token; on failure it keeps
-   * whatever is already cached so a transient backend hiccup won't sign the user
-   * out. Completes so it can gate `provideAppInitializer`.
+   * snapshot. No-ops in mock mode or when there's no token; on a transient
+   * failure (offline, 5xx) it keeps whatever is already cached so a backend
+   * hiccup won't sign the user out. A 401 is *not* transient — the
+   * session-expiry interceptor has already cleared the session by the time this
+   * `catchError` runs, so it resolves to `null` and `authGuard` sends the user to
+   * login. Completes so it can gate `provideAppInitializer`.
    */
   refreshCurrentUser(): Observable<User | null> {
     if (environment.useMockAuth || !this.token()) {
@@ -226,6 +229,15 @@ export class AuthService {
     if (!environment.useMockAuth) {
       this.authApi.logout().subscribe({ error: () => undefined });
     }
+    this.clearSession();
+  }
+
+  /**
+   * Drop the local session without calling the backend. Used by `logout()` and
+   * by the session-expiry interceptor on a 401 — there the token is already dead,
+   * so POSTing /auth/logout would just 401 again and re-enter the handler.
+   */
+  clearSession(): void {
     this.currentUser.set(null);
     this.token.set(null);
     this.pendingMobile.set('');
